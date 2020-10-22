@@ -11,4 +11,4 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: Start containers
-      run: echo "Hello"
+      run: docker-compose -f etc/docker/dev/docker-compose-storage.yml up -d
