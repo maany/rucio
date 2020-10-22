@@ -4,3 +4,10 @@ on:
   - pull_request
   - push
   - workflow_dispatch
+
+jobs:
+  runs-on: 'ubuntu-latest'
+  steps:
+    - uses: actions/checkout@v2
+    - name: Start containers
+      run: docker-compose -f etc/docker/dev/docker-compose-storage.yml up -d
