@@ -13,4 +13,4 @@ jobs:
     - name: Start containers
       run: docker-compose -f etc/docker/dev/docker-compose-storage.yml up -d
     - name: Execute tests
-      run: docker exec -it dev_rucio_1 tools/run_tests_docker.sh -ir
+      run: docker exec -t dev_rucio_1 tools/run_tests_docker.sh -ir
