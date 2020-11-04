@@ -12,3 +12,5 @@ jobs:
     - uses: actions/checkout@v2
     - name: Start containers
       run: docker-compose -f etc/docker/dev/docker-compose-storage.yml up -d
+    - name: Execute tests
+      run: docker exec -it dev_rucio_1 tools/run_tests_docker.sh -ir
