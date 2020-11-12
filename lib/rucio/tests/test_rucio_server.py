@@ -61,6 +61,21 @@ def file_generator(size=2048, namelen=10):
     return fn
 
 
+def get_scope_and_rses():
+    """
+    Detects if containerized rses for xrootd are available in the testing environment.
+    :return: A tuple (scope, rses) for the rucio client where scope is mock/docker and rses is a list.
+    """
+    cmd = "rucio list-rses --expression 'containerized=True'"
+    print(cmd)
+    exitcode, out, err = execute(cmd)
+    print(out, err)
+    rses = out.split()
+    if len(rses) == 0:
+        return 'mock', ['MOCK-POSIX']
+    return 'test', rses
+
+
 def delete_rules(did):
     # get the rules for the file
     print('Deleting rules')
@@ -81,8 +96,8 @@ class TestRucioClient(unittest.TestCase):
 
     def setUp(self):
         self.marker = '$ > '
-        self.scope = 'mock'
-        self.rse = 'MOCK-POSIX'
+        self.scope, self.rses = get_scope_and_rses()
+        self.rse = self.rses[0]
         self.generated_dids = []
 
     def tearDown(self):
@@ -121,7 +136,8 @@ class TestRucioClient(unittest.TestCase):
         tmp_dsn = 'tests.rucio_client_test_server_' + uuid()
 
         # Adding files to a new dataset
-        cmd = 'rucio upload --rse {0} --scope {1} {2} {3} {4} {1}:{5}'.format(self.rse, self.scope, tmp_file1, tmp_file2, tmp_file3, tmp_dsn)
+        cmd = 'rucio upload --rse {0} --scope {1} {2} {3} {4} {1}:{5}'.format(self.rse, self.scope, tmp_file1,
+                                                                              tmp_file2, tmp_file3, tmp_dsn)
         print(self.marker + cmd)
         exitcode, out, err = execute(cmd)
         print(out)
@@ -180,4 +196,5 @@ class TestRucioClient(unittest.TestCase):
         remove('/tmp/{0}/'.format(tmp_dsn) + tmp_file1[5:])
         remove('/tmp/{0}/'.format(tmp_dsn) + tmp_file2[5:])
         remove('/tmp/{0}/'.format(tmp_dsn) + tmp_file3[5:])
-        self.generated_dids + '{0}:{1} {0}:{2} {0}:{3} {0}:{4}'.format(self.scope, tmp_file1, tmp_file2, tmp_file3, tmp_dsn).split(' ')
+        self.generated_dids + '{0}:{1} {0}:{2} {0}:{3} {0}:{4}'.format(self.scope, tmp_file1, tmp_file2, tmp_file3,
+                                                                       tmp_dsn).split(' ')

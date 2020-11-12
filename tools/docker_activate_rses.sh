@@ -26,6 +26,11 @@ rucio-admin rse add-protocol --hostname xrd1 --scheme root --prefix //rucio --po
 rucio-admin rse add-protocol --hostname xrd2 --scheme root --prefix //rucio --port 1095 --impl rucio.rse.protocols.gfal.Default --domain-json '{"wan": {"read": 1, "write": 1, "delete": 1, "third_party_copy": 1}, "lan": {"read": 1, "write": 1, "delete": 1}}' XRD2
 rucio-admin rse add-protocol --hostname xrd3 --scheme root --prefix //rucio --port 1096 --impl rucio.rse.protocols.gfal.Default --domain-json '{"wan": {"read": 1, "write": 1, "delete": 1, "third_party_copy": 1}, "lan": {"read": 1, "write": 1, "delete": 1}}' XRD3
 
+# Set containerized attribute
+rucio-admin rse set-attribute --rse XRD1 --key containerized --value True
+rucio-admin rse set-attribute --rse XRD2 --key containerized --value True
+rucio-admin rse set-attribute --rse XRD3 --key containerized --value True
+
 # Enable FTS
 rucio-admin rse set-attribute --rse XRD1 --key fts --value https://fts:8446
 rucio-admin rse set-attribute --rse XRD2 --key fts --value https://fts:8446
