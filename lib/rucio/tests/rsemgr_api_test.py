@@ -28,6 +28,7 @@ from __future__ import print_function
 import json
 import os
 import os.path
+import subprocess
 import tempfile
 
 from rucio.common.utils import adler32
@@ -53,6 +54,9 @@ class MgrTestCases:
 
     def __init__(self, tmpdir, rse_tag, user, static_file, vo='def'):
         self.rse_settings = mgr.get_rse_info(rse=rse_tag, vo=vo)
+        print("jjjjjjjj")
+        print(self.rse_settings)
+        print("jjjjjjjj")
         try:
             with open('etc/rse-accounts.cfg') as f:
                 data = json.load(f)
@@ -64,6 +68,39 @@ class MgrTestCases:
         self.gettmpdir = tempfile.mkdtemp()
         self.user = user
         self.static_file = static_file
+
+        for file in MgrTestCases.files_local:
+            self.file_generator(file)
+
+    def file_generator(self, name, size=2048):
+        """ Create a bogus file and returns it's name.
+        :param size: size in bytes
+        :returns: The name of the generated file.
+        """
+        self.execute('dd if=/dev/urandom of={0} count={1} bs=1'.format('%s' % name, size))
+
+    def execute(self, cmd):
+        """
+        Executes a command in a subprocess. Returns a tuple
+        of (exitcode, out, err), where out is the string output
+        from stdout and err is the string output from stderr when
+        executing the command.
+
+        :param cmd: Command string to execute
+        """
+        process = subprocess.Popen(cmd,
+                                   shell=True,
+                                   stdin=subprocess.PIPE,
+                                   stdout=subprocess.PIPE,
+                                   stderr=subprocess.PIPE)
+        out = ''
+        err = ''
+        exitcode = 0
+
+        result = process.communicate()
+        (out, err) = result
+        exitcode = process.returncode
+        return exitcode, out, err
 
     def setup_scheme(self, scheme, protocol_impl=None):
         """(RSE/PROTOCOLS):  Make mgr to select this scheme first."""
@@ -123,18 +160,27 @@ class MgrTestCases:
     # Mgr-Tests: PUT
     def test_put_mgr_ok_multi(self):
         """(RSE/PROTOCOLS): Put multiple files to storage (Success)"""
-        status, details = mgr.upload(self.rse_settings, [{'name': '1_rse_local_put.raw', 'scope': 'user.%s' % self.user,
-                                                          'adler32': adler32('%s/1_rse_local_put.raw' % self.tmpdir), 'filesize': os.stat('%s/1_rse_local_put.raw' % self.tmpdir)[os.path.stat.ST_SIZE]},
-                                                         {'name': '2_rse_local_put.raw', 'scope': 'user.%s' % self.user,
-                                                          'adler32': adler32('%s/2_rse_local_put.raw' % self.tmpdir), 'filesize': os.stat('%s/2_rse_local_put.raw' % self.tmpdir)[os.path.stat.ST_SIZE]}],
-                                     self.tmpdir)
-        if not (status and details['user.%s:1_rse_local_put.raw' % self.user] and details['user.%s:2_rse_local_put.raw' % self.user]):
+        self.file_generator("test_file_1.raw")
+        self.file_generator("test_file_2.raw")
+        output = mgr.upload(self.rse_settings, [{'name': 'test_file_1.raw', 'scope': 'user.%s' % self.user,
+                                                          'adler32': adler32('test_file_1.raw'), 'filesize': os.stat('test_file_1.raw')[os.path.stat.ST_SIZE]},
+                                                          {'name': 'test_file_2.raw', 'scope': 'user.%s' % self.user,
+                                                           'adler32': adler32('test_file_2.raw'), 'filesize': os.stat('test_file_2.raw')[os.path.stat.ST_SIZE]}])
+        print(output)
+        print(type(output))
+        status = output[0]
+        details = output[1]
+
+        # print(details['user.%s:test_file_1.raw' % self.user])
+        print("MMMMMM")
+        if not (status and details['user.%s:test_file_1.raw' % self.user] and details['user.%s:test_file_2.raw' % self.user]):
             raise Exception('Return not as expected: %s, %s' % (status, details))
 
     def test_put_mgr_ok_single(self):
         """(RSE/PROTOCOLS): Put a single file to storage (Success)"""
         mgr.upload(self.rse_settings, {'name': '3_rse_local_put.raw', 'scope': 'user.%s' % self.user,
-                                       'adler32': adler32('%s/3_rse_local_put.raw' % self.tmpdir), 'filesize': os.stat('%s/3_rse_local_put.raw' % self.tmpdir)[os.path.stat.ST_SIZE]}, self.tmpdir)
+                                       'adler32': adler32('%s/3_rse_local_put.raw' % self.tmpdir),
+                                       'filesize': os.stat('%s/3_rse_local_put.raw' % self.tmpdir)[os.path.stat.ST_SIZE]}, source_dir=self.tmpdir)
 
     def test_put_mgr_SourceNotFound_multi(self):
         """(RSE/PROTOCOLS): Put multiple files to storage (SourceNotFound)"""
@@ -142,7 +188,7 @@ class MgrTestCases:
                                                           'adler32': 'some_random_stuff', 'filesize': 4711},
                                                          {'name': '4_rse_local_put.raw', 'scope': 'user.%s' % self.user,
                                                           'adler32': adler32('%s/4_rse_local_put.raw' % self.tmpdir), 'filesize': os.stat('%s/4_rse_local_put.raw' % self.tmpdir)[os.path.stat.ST_SIZE]}],
-                                     self.tmpdir)
+                                     source_dir=self.tmpdir)
         if details['user.%s:4_rse_local_put.raw' % self.user]:
             raise details['user.%s:not_existing_data.raw' % self.user]
         else:
@@ -150,7 +196,7 @@ class MgrTestCases:
 
     def test_put_mgr_SourceNotFound_single(self):
         """(RSE/PROTOCOLS): Put a single file to storage (SourceNotFound)"""
-        mgr.upload(self.rse_settings, {'name': 'not_existing_data2.raw', 'scope': 'user.%s' % self.user, 'adler32': 'random_stuff', 'filesize': 0}, self.tmpdir)
+        mgr.upload(self.rse_settings, {'name': 'not_existing_data2.raw', 'scope': 'user.%s' % self.user, 'adler32': 'random_stuff', 'filesize': 0}, source_dir=self.tmpdir)
 
     def test_put_mgr_FileReplicaAlreadyExists_multi(self):
         """(RSE/PROTOCOLS): Put multiple files to storage (FileReplicaAlreadyExists)"""
@@ -164,7 +210,7 @@ class MgrTestCases:
 
     def test_put_mgr_FileReplicaAlreadyExists_single(self):
         """(RSE/PROTOCOLS): Put a single file to storage (FileReplicaAlreadyExists)"""
-        mgr.upload(self.rse_settings, {'name': '1_rse_remote_get.raw', 'scope': 'user.%s' % self.user, 'adler32': 'bla-bla', 'filesize': 4711}, self.tmpdir)
+        mgr.upload(self.rse_settings, {'name': '1_rse_remote_get.raw', 'scope': 'user.%s' % self.user, 'adler32': 'bla-bla', 'filesize': 4711}, source_dir=self.tmpdir)
 
     # MGR-Tests: DELETE
     def test_delete_mgr_ok_multi(self):
