@@ -39,7 +39,7 @@ from rucio.tests.common import skip_rse_tests_with_accounts
 from rucio.tests.rsemgr_api_test import MgrTestCases
 
 
-# @skip_rse_tests_with_accounts
+@skip_rse_tests_with_accounts
 class TestRseXROOTD(unittest.TestCase):
     tmpdir = None
     user = None
