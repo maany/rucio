@@ -68,7 +68,7 @@ class TestRseXROOTD(unittest.TestCase):
             rse_id = 'XRD1'
             hostname = 'xrd1'
         # TODO should read container info from a config file
-        return rse_id, prefix, hostname, port
+        return rse_id, '/rucio/', hostname, port
 
     @classmethod
     def setUpClass(cls):
@@ -139,153 +139,170 @@ class TestRseXROOTD(unittest.TestCase):
         self.mtc = MgrTestCases(self.tmpdir, self.rse_id, TestRseXROOTD.user, TestRseXROOTD.static_file)
 
     #Mgr-Tests: GET
+    # #PASS
     # def test_multi_get_mgr_ok(self):
     #     """XROOTD (RSE/PROTOCOLS): Get multiple files from storage providing LFNs and PFNs (Success)"""
     #     self.mtc.test_multi_get_mgr_ok()
-    #
+
+    # # PASS
     # def test_get_mgr_ok_single_lfn(self):
     #     """XROOTD (RSE/PROTOCOLS): Get a single file from storage providing LFN (Success)"""
     #     self.mtc.test_get_mgr_ok_single_lfn()
     #
+    # #PASS
     # def test_get_mgr_ok_single_pfn(self):
     #     """XROOTD (RSE/PROTOCOLS): Get a single file from storage providing PFN (Success)"""
     #     self.mtc.test_get_mgr_ok_single_pfn()
     #
+    # #PASS
     # def test_get_mgr_SourceNotFound_multi(self):
     #     """XROOTD (RSE/PROTOCOLS): Get multiple files from storage providing LFNs and PFNs (SourceNotFound)"""
     #     with pytest.raises(exception.SourceNotFound):
     #         self.mtc.test_get_mgr_SourceNotFound_multi()
-
+    #
+    # #PASS
     # def test_get_mgr_SourceNotFound_single_lfn(self):
     #     """XROOTD (RSE/PROTOCOLS): Get a single file from storage providing LFN (SourceNotFound)"""
     #     with pytest.raises(exception.SourceNotFound):
     #         self.mtc.test_get_mgr_SourceNotFound_single_lfn()
     #
+    # #PASS
     # def test_get_mgr_SourceNotFound_single_pfn(self):
     #     """XROOTD (RSE/PROTOCOLS): Get a single file from storage providing PFN (SourceNotFound)"""
     #     with pytest.raises(exception.SourceNotFound):
     #         self.mtc.test_get_mgr_SourceNotFound_single_pfn()
-    #
-    # #Mgr-Tests: PUT
-    def test_put_mgr_ok_multi(self):
-        """XROOTD (RSE/PROTOCOLS): Put multiple files to storage providing LFNs and PFNs (Success)"""
-        self.mtc.test_put_mgr_ok_multi()
 
+    # #Mgr-Tests: PUT
+    # #PASS
+    # def test_put_mgr_ok_multi(self):
+    #     """XROOTD (RSE/PROTOCOLS): Put multiple files to storage providing LFNs and PFNs (Success)"""
+    #     self.mtc.test_put_mgr_ok_multi()
+    #
+    # #PASS
     # def test_put_mgr_ok_single(self):
     #     """XROOTD (RSE/PROTOCOLS): Put a single file to storage (Success)"""
     #     self.mtc.test_put_mgr_ok_single()
     #
+    # #PASS
     # def test_put_mgr_SourceNotFound_multi(self):
     #     """XROOTD (RSE/PROTOCOLS): Put multiple files to storage (SourceNotFound)"""
     #     with pytest.raises(exception.SourceNotFound):
     #         self.mtc.test_put_mgr_SourceNotFound_multi()
-
+    #
+    # #PASS
     # def test_put_mgr_SourceNotFound_single(self):
     #     """XROOTD (RSE/PROTOCOLS): Put a single file to storage (SourceNotFound)"""
     #     with pytest.raises(exception.SourceNotFound):
     #         self.mtc.test_put_mgr_SourceNotFound_single()
-    #
+    # # PASS
     # def test_put_mgr_FileReplicaAlreadyExists_multi(self):
     #     """XROOTD (RSE/PROTOCOLS): Put multiple files to storage (FileReplicaAlreadyExists)"""
     #     with pytest.raises(exception.FileReplicaAlreadyExists):
     #         self.mtc.test_put_mgr_FileReplicaAlreadyExists_multi()
-    #
+    # #PASS
     # def test_put_mgr_FileReplicaAlreadyExists_single(self):
     #     """XROOTD (RSE/PROTOCOLS): Put a single file to storage (FileReplicaAlreadyExists)"""
     #     with pytest.raises(exception.FileReplicaAlreadyExists):
     #         self.mtc.test_put_mgr_FileReplicaAlreadyExists_single()
-    #
-    # # MGR-Tests: DELETE
+
+    # MGR-Tests: DELETE
+    #PASS
     # def test_delete_mgr_ok_multi(self):
     #     """XROOTD (RSE/PROTOCOLS): Delete multiple files from storage (Success)"""
     #     self.mtc.test_delete_mgr_ok_multi()
     #
+    #PASS
     # def test_delete_mgr_ok_single(self):
     #     """XROOTD (RSE/PROTOCOLS): Delete a single file from storage (Success)"""
     #     self.mtc.test_delete_mgr_ok_single()
-    #
+    # PASS
     # def test_delete_mgr_SourceNotFound_multi(self):
     #     """XROOTD (RSE/PROTOCOLS): Delete multiple files from storage (SourceNotFound)"""
     #     with pytest.raises(exception.SourceNotFound):
     #         self.mtc.test_delete_mgr_SourceNotFound_multi()
-    #
+    # PASS
     # def test_delete_mgr_SourceNotFound_single(self):
     #     """XROOTD (RSE/PROTOCOLS): Delete a single file from storage (SourceNotFound)"""
     #     with pytest.raises(exception.SourceNotFound):
     #         self.mtc.test_delete_mgr_SourceNotFound_single()
-    #
+
     # # MGR-Tests: EXISTS
+    #PASS
     # def test_exists_mgr_ok_multi(self):
     #     """XROOTD (RSE/PROTOCOLS): Check multiple files on storage (Success)"""
     #     self.mtc.test_exists_mgr_ok_multi()
-    #
+
+    #PASS
     # def test_exists_mgr_ok_single_lfn(self):
     #     """XROOTD (RSE/PROTOCOLS): Check a single file on storage using LFN (Success)"""
     #     self.mtc.test_exists_mgr_ok_single_lfn()
     #
+    # #PASS
     # def test_exists_mgr_ok_single_pfn(self):
     #     """XROOTD (RSE/PROTOCOLS): Check a single file on storage using PFN (Success)"""
     #     self.mtc.test_exists_mgr_ok_single_pfn()
-    #
+    # PASS
     # def test_exists_mgr_false_multi(self):
     #     """XROOTD (RSE/PROTOCOLS): Check multiple files on storage (Fail)"""
     #     self.mtc.test_exists_mgr_false_multi()
-    #
+    # #
+    # #PASS
     # def test_exists_mgr_false_single(self):
     #     """XROOTD (RSE/PROTOCOLS): Check a single file on storage using LFN (Fail)"""
     #     self.mtc.test_exists_mgr_false_single_lfn()
     #
+    # #PASS
     # def test_exists_mgr_false_single_pfn(self):
     #     """XROOTD (RSE/PROTOCOLS): Check a single file on storage using PFN (Fail)"""
     #     self.mtc.test_exists_mgr_false_single_pfn()
-    #
-    # # MGR-Tests: RENAME
-    # def test_rename_mgr_ok_multi(self):
-    #     """XROOTD (RSE/PROTOCOLS): Rename multiple files on storage (Success)"""
-    #     self.mtc.test_rename_mgr_ok_multi()
-    #
-    # def test_rename_mgr_ok_single_lfn(self):
-    #     """XROOTD (RSE/PROTOCOLS): Rename a single file on storage using LFN (Success)"""
-    #     self.mtc.test_rename_mgr_ok_single_lfn()
-    #
-    # def test_rename_mgr_ok_single_pfn(self):
-    #     """XROOTD (RSE/PROTOCOLS): Rename a single file on storage using PFN (Success)"""
-    #     self.mtc.test_rename_mgr_ok_single_pfn()
-    #
-    # def test_rename_mgr_FileReplicaAlreadyExists_multi(self):
-    #     """XROOTD (RSE/PROTOCOLS): Rename multiple files on storage (FileReplicaAlreadyExists)"""
-    #     with pytest.raises(exception.FileReplicaAlreadyExists):
-    #         self.mtc.test_rename_mgr_FileReplicaAlreadyExists_multi()
-    #
-    # def test_rename_mgr_FileReplicaAlreadyExists_single_lfn(self):
-    #     """XROOTD (RSE/PROTOCOLS): Rename a single file on storage using LFN(FileReplicaAlreadyExists)"""
-    #     with pytest.raises(exception.FileReplicaAlreadyExists):
-    #         self.mtc.test_rename_mgr_FileReplicaAlreadyExists_single_lfn()
-    #
-    # def test_rename_mgr_FileReplicaAlreadyExists_single_pfn(self):
-    #     """XROOTD (RSE/PROTOCOLS): Rename a single file on storage using PFN (FileReplicaAlreadyExists)"""
-    #     with pytest.raises(exception.FileReplicaAlreadyExists):
-    #         self.mtc.test_rename_mgr_FileReplicaAlreadyExists_single_pfn()
-    #
-    # def test_rename_mgr_SourceNotFound_multi(self):
-    #     """XROOTD (RSE/PROTOCOLS): Rename multiple files on storage (SourceNotFound)"""
-    #     with pytest.raises(exception.SourceNotFound):
-    #         self.mtc.test_rename_mgr_SourceNotFound_multi()
-    #
-    # def test_rename_mgr_SourceNotFound_single_lfn(self):
-    #     """XROOTD (RSE/PROTOCOLS): Rename a single file on storage using LFN (SourceNotFound)"""
-    #     with pytest.raises(exception.SourceNotFound):
-    #         self.mtc.test_rename_mgr_SourceNotFound_single_lfn()
-    #
-    # def test_rename_mgr_SourceNotFound_single_pfn(self):
-    #     """XROOTD (RSE/PROTOCOLS): Rename a single file on storage using PFN (SourceNotFound)"""
-    #     with pytest.raises(exception.SourceNotFound):
-    #         self.mtc.test_rename_mgr_SourceNotFound_single_pfn()
-    #
-    # def test_change_scope_mgr_ok_single_lfn(self):
-    #     """XROOTD (RSE/PROTOCOLS): Change the scope of a single file on storage using LFN (Success)"""
-    #     self.mtc.test_change_scope_mgr_ok_single_lfn()
-    #
-    # def test_change_scope_mgr_ok_single_pfn(self):
-    #     """XROOTD (RSE/PROTOCOLS): Change the scope of a single file on storage using PFN (Success)"""
-    #     self.mtc.test_change_scope_mgr_ok_single_pfn()
+
+    # MGR-Tests: RENAME
+    def test_rename_mgr_ok_multi(self):
+        """XROOTD (RSE/PROTOCOLS): Rename multiple files on storage (Success)"""
+        self.mtc.test_rename_mgr_ok_multi()
+
+    def test_rename_mgr_ok_single_lfn(self):
+        """XROOTD (RSE/PROTOCOLS): Rename a single file on storage using LFN (Success)"""
+        self.mtc.test_rename_mgr_ok_single_lfn()
+
+    def test_rename_mgr_ok_single_pfn(self):
+        """XROOTD (RSE/PROTOCOLS): Rename a single file on storage using PFN (Success)"""
+        self.mtc.test_rename_mgr_ok_single_pfn()
+
+    def test_rename_mgr_FileReplicaAlreadyExists_multi(self):
+        """XROOTD (RSE/PROTOCOLS): Rename multiple files on storage (FileReplicaAlreadyExists)"""
+        with pytest.raises(exception.FileReplicaAlreadyExists):
+            self.mtc.test_rename_mgr_FileReplicaAlreadyExists_multi()
+
+    def test_rename_mgr_FileReplicaAlreadyExists_single_lfn(self):
+        """XROOTD (RSE/PROTOCOLS): Rename a single file on storage using LFN(FileReplicaAlreadyExists)"""
+        with pytest.raises(exception.FileReplicaAlreadyExists):
+            self.mtc.test_rename_mgr_FileReplicaAlreadyExists_single_lfn()
+
+    def test_rename_mgr_FileReplicaAlreadyExists_single_pfn(self):
+        """XROOTD (RSE/PROTOCOLS): Rename a single file on storage using PFN (FileReplicaAlreadyExists)"""
+        with pytest.raises(exception.FileReplicaAlreadyExists):
+            self.mtc.test_rename_mgr_FileReplicaAlreadyExists_single_pfn()
+
+    def test_rename_mgr_SourceNotFound_multi(self):
+        """XROOTD (RSE/PROTOCOLS): Rename multiple files on storage (SourceNotFound)"""
+        with pytest.raises(exception.SourceNotFound):
+            self.mtc.test_rename_mgr_SourceNotFound_multi()
+
+    def test_rename_mgr_SourceNotFound_single_lfn(self):
+        """XROOTD (RSE/PROTOCOLS): Rename a single file on storage using LFN (SourceNotFound)"""
+        with pytest.raises(exception.SourceNotFound):
+            self.mtc.test_rename_mgr_SourceNotFound_single_lfn()
+
+    def test_rename_mgr_SourceNotFound_single_pfn(self):
+        """XROOTD (RSE/PROTOCOLS): Rename a single file on storage using PFN (SourceNotFound)"""
+        with pytest.raises(exception.SourceNotFound):
+            self.mtc.test_rename_mgr_SourceNotFound_single_pfn()
+
+    def test_change_scope_mgr_ok_single_lfn(self):
+        """XROOTD (RSE/PROTOCOLS): Change the scope of a single file on storage using LFN (Success)"""
+        self.mtc.test_change_scope_mgr_ok_single_lfn()
+
+    def test_change_scope_mgr_ok_single_pfn(self):
+        """XROOTD (RSE/PROTOCOLS): Change the scope of a single file on storage using PFN (Success)"""
+        self.mtc.test_change_scope_mgr_ok_single_pfn()
