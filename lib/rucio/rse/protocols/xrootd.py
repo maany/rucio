@@ -196,9 +196,15 @@ class Default(protocol.RSEProtocol):
         try:
             # The query stats call is not implemented on some xroot doors.
             # Workaround: fail, if server does not reply within 10 seconds for static config query
-            cmd = 'XrdSecPROTOCOL=gsi XRD_REQUESTTIMEOUT=10 xrdfs %s:%s query config %s:%s' % (self.hostname, self.port, self.hostname, self.port)
+            cmd = 'XrdSecPROTOCOL=gsi XRD_REQUESTTIMEOUT=30 xrdfs %s:%s query config %s:%s' % (self.hostname, self.port, self.hostname, self.port)
+            print(cmd)
+            print("cmdcmdcmdcmd")
             self.logger.info('xrootd.connect: cmd: {}'.format(cmd))
             status, out, err = execute(cmd)
+            print(status)
+            print(out)
+            print(err)
+            print("&&&&&")
             if status != 0:
                 raise exception.RSEAccessDenied(err)
         except Exception as e:

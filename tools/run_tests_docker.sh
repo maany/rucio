@@ -137,6 +137,7 @@ fi
 
 if test ${activate_rse}; then
     echo 'Activating default RSEs (XRD1, XRD2, XRD3)'
+    cp etc/rse-accounts.cfg.template etc/rse-accounts.cfg
     tools/docker_activate_rses.sh
 fi
 

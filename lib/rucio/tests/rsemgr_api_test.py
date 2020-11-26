@@ -80,7 +80,7 @@ def execute(cmd):
 class MgrTestCases:
     files_local = ["1_rse_local_put.raw", "2_rse_local_put.raw", "3_rse_local_put.raw", "4_rse_local_put.raw"]
     files_local_and_remote = ['1_rse_local_and_remote_put.raw', '2_rse_local_and_remote_put.raw']
-    files_remote = ['1_rse_remote_get.raw', '2_rse_remote_get.raw','3_rse_remote_get.raw', '4_rse_remote_get.raw',
+    files_remote = ['1_rse_remote_get.raw', '2_rse_remote_get.raw', '3_rse_remote_get.raw', '4_rse_remote_get.raw',
                     '1_rse_remote_delete.raw', '2_rse_remote_delete.raw', '3_rse_remote_delete.raw',
                     '4_rse_remote_delete.raw',
                     '1_rse_remote_exists.raw', '2_rse_remote_exists.raw',
@@ -235,15 +235,13 @@ class MgrTestCases:
         else:
             raise Exception('Return not as expected: %s, %s' % (status, details))
 
-
     def test_put_mgr_FileReplicaAlreadyExists_single(self):
         """(RSE/PROTOCOLS): Put a single file to storage (FileReplicaAlreadyExists)"""
         mgr.upload(self.rse_settings,
                    {'name': '1_rse_local_and_remote_put.raw', 'scope': 'user.%s' % self.user,
                     'adler32': adler32('%s/1_rse_local_and_remote_put.raw' % self.tmpdir),
-                    'filesize':os.stat('%s/1_rse_local_and_remote_put.raw' % self.tmpdir)[
-                                  os.path.stat.ST_SIZE]}, source_dir=self.tmpdir)
-
+                    'filesize': os.stat('%s/1_rse_local_and_remote_put.raw' % self.tmpdir)[
+                        os.path.stat.ST_SIZE]}, source_dir=self.tmpdir)
 
     # MGR-Tests: DELETE
     def test_delete_mgr_ok_multi(self):
@@ -259,17 +257,14 @@ class MgrTestCases:
             else:
                 raise Exception('Return not as expected: %s, %s' % (status, details))
 
-
     def test_delete_mgr_ok_single(self):
         """(RSE/PROTOCOLS): Delete a single file from storage (Success)"""
         mgr.delete(self.rse_settings, {'name': '3_rse_remote_delete.raw', 'scope': 'user.%s' % self.user})
-
 
     def test_delete_mgr_ok_dir(self):
         """(RSE/PROTOCOLS): Delete a directory from storage (Success)"""
         mgr.delete(self.rse_settings,
                    {'path': 'user/%s' % self.user, 'name': 'user.%s' % self.user, 'scope': 'user.%s' % self.user})
-
 
     def test_delete_mgr_SourceNotFound_multi(self):
         """(RSE/PROTOCOLS): Delete multiple files from storage (SourceNotFound)"""
@@ -281,11 +276,9 @@ class MgrTestCases:
         else:
             raise Exception('Return not as expected: %s, %s' % (status, details))
 
-
     def test_delete_mgr_SourceNotFound_single(self):
         """(RSE/PROTOCOLS): Delete a single file from storage (SourceNotFound)"""
         mgr.delete(self.rse_settings, {'name': 'not_existing_data.raw', 'scope': 'user.%s' % self.user})
-
 
     # MGR-Tests: EXISTS
     def test_exists_mgr_ok_multi(self):
@@ -305,11 +298,9 @@ class MgrTestCases:
             'user.%s:2_rse_remote_get.raw' % self.user] and details[pfn_a] and details[pfn_b]):
             raise Exception('Return not as expected: %s, %s' % (status, details))
 
-
     def test_exists_mgr_ok_single_lfn(self):
         """(RSE/PROTOCOLS): Check a single file on storage using LFN (Success)"""
         mgr.exists(self.rse_settings, {'name': '1_rse_remote_get.raw', 'scope': 'user.%s' % self.user})
-
 
     def test_exists_mgr_ok_single_pfn(self):
         """(RSE/PROTOCOLS): Check a single file on storage using PFN (Success)"""
@@ -317,7 +308,6 @@ class MgrTestCases:
             mgr.lfns2pfns(self.rse_settings, {'name': '1_rse_remote_get.raw', 'scope': 'user.%s' % self.user}).values()[
                 0]
         mgr.exists(self.rse_settings, {'name': pfn})
-
 
     def test_exists_mgr_false_multi(self):
         """(RSE/PROTOCOLS): Check multiple files on storage (Fail)"""
@@ -336,11 +326,9 @@ class MgrTestCases:
             'user.%s:not_existing_data.raw' % self.user] or not details[pfn_a] or details[pfn_b]:
             raise Exception('Return not as expected: %s, %s' % (status, details))
 
-
     def test_exists_mgr_false_single_lfn(self):
         """(RSE/PROTOCOLS): Check a single file on storage using LFN (Fail)"""
         not mgr.exists(self.rse_settings, {'name': 'not_existing_data.raw', 'scope': 'user.%s' % self.user})
-
 
     def test_exists_mgr_false_single_pfn(self):
         """(RSE/PROTOCOLS): Check a single file on storage using PFN (Fail)"""
@@ -348,7 +336,6 @@ class MgrTestCases:
             mgr.lfns2pfns(self.rse_settings,
                           {'name': '1_rse_not_existing.raw', 'scope': 'user.%s' % self.user}).values()[0]
         not mgr.exists(self.rse_settings, {'name': pfn})
-
 
     # MGR-Tests: RENAME
     def test_rename_mgr_ok_multi(self):
@@ -367,12 +354,10 @@ class MgrTestCases:
             'user.%s:2_rse_remote_rename.raw' % self.user] and details[pfn_a] and details[pfn_b]):
             raise Exception('Return not as expected: %s, %s' % (status, details))
 
-
     def test_rename_mgr_ok_single_lfn(self):
         """(RSE/PROTOCOLS): Rename a single file on storage using LFN (Success)"""
         mgr.rename(self.rse_settings, {'name': '3_rse_remote_rename.raw', 'scope': 'user.%s' % self.user,
                                        'new_name': '3_rse_remote_renamed.raw', 'new_scope': 'user.%s' % self.user})
-
 
     def test_rename_mgr_ok_single_pfn(self):
         """(RSE/PROTOCOLS): Rename a single file on storage using PFN (Success)"""
@@ -383,7 +368,6 @@ class MgrTestCases:
         pfn_new = mgr.lfns2pfns(self.rse_settings, {'name': '9_rse_new.raw', 'scope': 'user.%s' % self.user}).values()[
             0]
         mgr.rename(self.rse_settings, {'name': pfn, 'new_name': pfn_new})
-
 
     def test_rename_mgr_FileReplicaAlreadyExists_multi(self):
         """(RSE/PROTOCOLS): Rename multiple files on storage (FileReplicaAlreadyExists)"""
@@ -413,12 +397,10 @@ class MgrTestCases:
         else:
             raise Exception('Return not as expected: %s, %s' % (status, details))
 
-
     def test_rename_mgr_FileReplicaAlreadyExists_single_lfn(self):
         """(RSE/PROTOCOLS): Rename a single file on storage using LFN (FileReplicaAlreadyExists)"""
         mgr.rename(self.rse_settings, {'name': '6_rse_remote_rename.raw', 'scope': 'user.%s' % self.user,
                                        'new_name': '1_rse_remote_get.raw', 'new_scope': 'user.%s' % self.user})
-
 
     def test_rename_mgr_FileReplicaAlreadyExists_single_pfn(self):
         """(RSE/PROTOCOLS): Rename a single file on storage using PFN (FileReplicaAlreadyExists)"""
@@ -430,7 +412,6 @@ class MgrTestCases:
             mgr.lfns2pfns(self.rse_settings, {'name': '1_rse_remote_get.raw', 'scope': 'user.%s' % self.user}).values()[
                 0]
         mgr.rename(self.rse_settings, {'name': pfn, 'new_name': pfn_new})
-
 
     def test_rename_mgr_SourceNotFound_multi(self):
         """(RSE/PROTOCOLS): Rename multiple files on storage (SourceNotFound)"""
@@ -449,12 +430,10 @@ class MgrTestCases:
         else:
             raise Exception('Return not as expected: %s, %s' % (status, details))
 
-
     def test_rename_mgr_SourceNotFound_single_lfn(self):
         """(RSE/PROTOCOLS): Rename a single file on storage using LFN (SourceNotFound)"""
         mgr.rename(self.rse_settings, {'name': '1_rse_not_existing.raw', 'scope': 'user.%s' % self.user,
                                        'new_name': '1_rse_new_not_created.raw'})
-
 
     def test_rename_mgr_SourceNotFound_single_pfn(self):
         """(RSE/PROTOCOLS): Rename a single file on storage using PFN (SourceNotFound)"""
@@ -465,12 +444,10 @@ class MgrTestCases:
                                 {'name': '1_rse_new_not_created.raw', 'scope': 'user.%s' % self.user}).values()[0]
         mgr.rename(self.rse_settings, {'name': pfn, 'new_name': pfn_new})
 
-
     def test_change_scope_mgr_ok_single_lfn(self):
         """(RSE/PROTOCOLS): Change the scope of a single file on storage using LFN (Success)"""
         mgr.rename(self.rse_settings, {'name': '1_rse_remote_change_scope.raw', 'scope': 'user.%s' % self.user,
                                        'new_scope': 'group.%s' % self.user})
-
 
     def test_change_scope_mgr_ok_single_pfn(self):
         """(RSE/PROTOCOLS): Change the scope of a single file on storage using PFN (Success)"""

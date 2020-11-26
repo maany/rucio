@@ -96,6 +96,8 @@ def get_rse_info(rse=None, vo='def', rse_id=None, session=None):
     if not rse_info:  # no cached entry found
         rse_info = __request_rse_info(str(rse), vo=vo, rse_id=rse_id, session=session)  # NOQA pylint: disable=undefined-variable
         RSE_REGION.set(key, rse_info)  # NOQA pylint: disable=undefined-variable
+    print("RSE_INFO:")
+    print(rse_info)
     return rse_info
 
 
@@ -182,6 +184,8 @@ def create_protocol(rse_settings, operation, scheme=None, domain='wan', auth_tok
     """
 
     # Verify feasibility of Protocol
+    print("Create Protocol: RSE Settings")
+    print(rse_settings)
     operation = operation.lower()
     if operation not in utils.rse_supported_protocol_operations():
         raise exception.RSEOperationNotSupported('Operation %s is not supported' % operation)
@@ -267,6 +271,9 @@ def exists(rse_settings, files, domain='wan', auth_token=None, logger=_logger):
 
     protocol = create_protocol(rse_settings, 'read', domain=domain, auth_token=auth_token, logger=logger)
     protocol.connect()
+    print("***************")
+    print(protocol)
+    print("***************")
     try:
         protocol.exists(None)
     except NotImplementedError:
@@ -334,6 +341,7 @@ def upload(rse_settings, lfns, domain='wan', source_dir=None, force_pfn=None, fo
         :raises ServiceUnavailable: for any other reason
     """
 
+
     ret = {}
     gs = True  # gs represents the global status which indicates if every operation worked in bulk mode
 
@@ -341,6 +349,7 @@ def upload(rse_settings, lfns, domain='wan', source_dir=None, force_pfn=None, fo
     protocol.connect()
     protocol_delete = create_protocol(rse_settings, 'delete', domain=domain, auth_token=auth_token, logger=logger)
     protocol_delete.connect()
+
 
     lfns = [lfns] if not type(lfns) is list else lfns
     for lfn in lfns:
@@ -414,6 +423,7 @@ def upload(rse_settings, lfns, domain='wan', source_dir=None, force_pfn=None, fo
                         for checksum_name in GLOBALLY_SUPPORTED_CHECKSUMS:
                             if (checksum_name in stats) and (checksum_name in lfn):
                                 verified_checksums.append(stats[checksum_name] == lfn[checksum_name])
+                                print("{val1} Here I go again {val2}".format(val1=stats[checksum_name], val2=lfn[checksum_name]))
                         # Upload is successful if at least one checksum was found
                         valid = any(verified_checksums)
                         if not valid and ('filesize' in stats) and ('filesize' in lfn):
@@ -442,6 +452,7 @@ def upload(rse_settings, lfns, domain='wan', source_dir=None, force_pfn=None, fo
                         gs = False
                         ret['%s:%s' % (scope, name)] = e
                 else:
+                    print("Here I go again")
                     gs = False
                     ret['%s:%s' % (scope, name)] = exception.RucioException('Replica %s is corrupted.' % pfn)
         else:
@@ -463,7 +474,6 @@ def upload(rse_settings, lfns, domain='wan', source_dir=None, force_pfn=None, fo
                 try:  # Get metadata of file to verify if upload was successful
                     try:
                         stats = _retry_protocol_stat(protocol, pfn)
-
                         # Verify all supported checksums and keep rack of the verified ones
                         verified_checksums = []
                         for checksum_name in GLOBALLY_SUPPORTED_CHECKSUMS:
@@ -500,7 +510,11 @@ def upload(rse_settings, lfns, domain='wan', source_dir=None, force_pfn=None, fo
             if isinstance(ret[x], Exception):
                 raise ret[x]
             else:
-                return {0: ret[x], 1: ret, 'success': ret[x], 'pfn': pfn}
+                return_obj =  {0: ret[x], 1: ret, 'success': ret[x], 'pfn': pfn}
+                print("trump")
+                print(return_obj)
+                print("trump")
+                return return_obj
     return {0: gs, 1: ret, 'success': gs, 'pfn': pfn}
 
 
