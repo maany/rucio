@@ -12,5 +12,9 @@ jobs:
     - uses: actions/checkout@v2
     - name: Start containers
       run: docker-compose -f etc/docker/dev/docker-compose-storage.yml up -d
-    - name: Execute tests
+    - name: Initialize tests
       run: docker exec -t dev_rucio_1 tools/run_tests_docker.sh -ir
+    - name: File Upload/Download Test
+      run: docker exec -t dev_rucio_1 pytest -v --full-trace lib/rucio/tests/test_rucio_server.py
+    - name: Test Protocol XrootD
+      run: docker exec -t dev_rucio_1 pytest -v --full-trace lib/rucio/tests/test_rse_protocol_xrootd.py
