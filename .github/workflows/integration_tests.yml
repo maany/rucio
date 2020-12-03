@@ -31,7 +31,7 @@ jobs:
         with:
           username: "${{ github.actor }}"
           password: "${{ secrets.GITHUB_TOKEN }}"
-          registry: docker.pkg.github.com
+          registry: ghcr.io
           context: "${{ github.workspace }}/dev"
           dockerfile: Dockerfile_py3
           image_name: rucio-dev

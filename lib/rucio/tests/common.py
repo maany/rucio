@@ -40,7 +40,7 @@ from six import PY3
 from rucio.common.utils import generate_uuid as uuid, execute
 
 skip_rse_tests_with_accounts = pytest.mark.skipif(not os.path.exists('etc/rse-accounts.cfg'), reason='fails if no rse-accounts.cfg found')
-
+disable_in_integration_test = pytest.mark.skipif(os.getenv("INTEGRATION_TEST"), reason='disabled in end to end integration tests, if running locally')
 
 def account_name_generator():
     """ Generate random account name.
