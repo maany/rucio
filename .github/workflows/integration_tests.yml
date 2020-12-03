@@ -40,7 +40,7 @@ jobs:
         run: |
           IMG=$(echo "${{ steps.build.outputs.FULL_IMAGE_NAME }}" | sed 's_/_\\/_g')
           echo $IMG
-          sed "s/image: rucio\/rucio-dev/image: IMG/" $GITHUB_WORKSPACE/dev/rucio/etc/docker/test/docker-compose-integration-test.yml
+          sed "s/image: rucio\/rucio-dev/image: $IMG/" $GITHUB_WORKSPACE/dev/rucio/etc/docker/test/docker-compose-integration-test.yml
           cat $GITHUB_WORKSPACE/dev/rucio/etc/docker/test/docker-compose-integration-test.yml
 #          echo "${{ steps.build.outputs.FULL_IMAGE_NAME }}"
 #      - name: Start containers
