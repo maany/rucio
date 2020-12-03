@@ -11,8 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
         name: Checkout rucio source
-        with:
-          path: rucio
+
       - name: Checkout rucio containers repository
         uses: actions/checkout@v2
         with:
