@@ -21,10 +21,10 @@ jobs:
         shell: bash
         run: |
           pwd
-          ls -la
+          ls -la ./dev
           sed -i "s/RUN git clone .*/COPY .\/rucio \/tmp\/rucio/" $GITHUB_WORKSPACE/dev/Dockerfile_py3
           cat $GITHUB_WORKSPACE/dev/Dockerfile_py3
-          docker build -t rucio-dev -f $GITHUB_WORKSPACE/dev/Dockerfile_py3 $GITHUB_WORKSPACE
+          docker build -t rucio-dev -f $GITHUB_WORKSPACE/dev/Dockerfile_py3 $GITHUB_WORKSPACE/dev
 #      - name: Start containers
 #        run: docker-compose -f etc/docker/dev/docker-compose-integration-test.yml up -d
 #      - name: Initialize tests
