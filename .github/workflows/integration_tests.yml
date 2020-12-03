@@ -38,18 +38,20 @@ jobs:
       - name: Prepare Docker Compose
         shell: bash
         run: |
-          sed "s/image: rucio\/rucio-dev/image: \"${{ steps.build.outputs.FULL_IMAGE_NAME }}\"/" $GITHUB_WORKSPACE/dev/rucio/etc/docker/test/docker-compose-integration-test.yml
+          IMG=$(echo "${{ steps.build.outputs.FULL_IMAGE_NAME }}" | sed 's_/_\\/_g')
+          echo $IMG
+          sed "s/image: rucio\/rucio-dev/image: IMG/" $GITHUB_WORKSPACE/dev/rucio/etc/docker/test/docker-compose-integration-test.yml
           cat $GITHUB_WORKSPACE/dev/rucio/etc/docker/test/docker-compose-integration-test.yml
-          echo "${{ steps.build.outputs.FULL_IMAGE_NAME }}"
-      - name: Start containers
-        run: docker-compose -f $GITHUB_WORKSPACE/dev/rucio/etc/docker/test/docker-compose-integration-test.yml up -d
-      - name: Initialize tests
-        run: docker exec -t test_rucio_1 tools/run_tests_docker.sh -ir
-      - name: File Upload/Download Test
-        run: docker exec -t test_rucio_1 pytest -v --full-trace lib/rucio/tests/test_rucio_server.py
-      - name: Test Protocol XrootD
-        run: docker exec -t test_rucio_1 pytest -v --full-trace lib/rucio/tests/test_rse_protocol_xrootd.py
-      - name: Stop containers
-        run: docker-compose -f $GITHUB_WORKSPACE/dev/rucio/etc/docker/test/docker-compose-integration-test.yml down
+#          echo "${{ steps.build.outputs.FULL_IMAGE_NAME }}"
+#      - name: Start containers
+#        run: docker-compose -f $GITHUB_WORKSPACE/dev/rucio/etc/docker/test/docker-compose-integration-test.yml up -d
+#      - name: Initialize tests
+#        run: docker exec -t test_rucio_1 tools/run_tests_docker.sh -ir
+#      - name: File Upload/Download Test
+#        run: docker exec -t test_rucio_1 pytest -v --full-trace lib/rucio/tests/test_rucio_server.py
+#      - name: Test Protocol XrootD
+#        run: docker exec -t test_rucio_1 pytest -v --full-trace lib/rucio/tests/test_rse_protocol_xrootd.py
+#      - name: Stop containers
+#        run: docker-compose -f $GITHUB_WORKSPACE/dev/rucio/etc/docker/test/docker-compose-integration-test.yml down
     outputs:
       image: ${{ steps.build.outputs.FULL_IMAGE_NAME }}
