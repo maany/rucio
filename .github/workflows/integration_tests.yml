@@ -9,23 +9,22 @@ jobs:
   integration-tests:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-        name: Checkout rucio source
-        with:
-          path: rucio
       - name: Checkout rucio containers repository
         uses: actions/checkout@v2
         with:
           repository: rucio/containers
-          path: containers
+      - uses: actions/checkout@v2
+        name: Checkout rucio source
+        with:
+          path: dev/rucio
       - name: Build Images
         shell: bash
         run: |
           pwd
           ls -la
-          sed -i "s/RUN git clone .*/COPY ..\/..\/rucio \/tmp\/rucio/" $GITHUB_WORKSPACE/containers/dev/Dockerfile_py3
-          cat $GITHUB_WORKSPACE/containers/dev/Dockerfile_py3
-          docker build -t rucio-dev -f $GITHUB_WORKSPACE/containers/dev/Dockerfile_py3 $GITHUB_WORKSPACE/containers/dev
+          sed -i "s/RUN git clone .*/COPY .\/rucio \/tmp\/rucio/" $GITHUB_WORKSPACE/dev/Dockerfile_py3
+          cat $GITHUB_WORKSPACE/dev/Dockerfile_py3
+          docker build -t rucio-dev -f $GITHUB_WORKSPACE/dev/Dockerfile_py3 $GITHUB_WORKSPACE
 #      - name: Start containers
 #        run: docker-compose -f etc/docker/dev/docker-compose-integration-test.yml up -d
 #      - name: Initialize tests
