@@ -21,8 +21,10 @@ jobs:
       - name: Build Images
         shell: bash
         run: |
-          sed -i "s/RUN git clone .*/COPY .\/ \/tmp\/rucio/" containers/Dockerfile_py3
-          docker build -t rucio-dev -f containers/Dockerfile_py3 .
+          pwd
+          ls -la
+#          sed -i "s/RUN git clone .*/COPY .\/ \/tmp\/rucio/" containers/Dockerfile_py3
+#          docker build -t rucio-dev -f containers/Dockerfile_py3 .
 #      - name: Start containers
 #        run: docker-compose -f etc/docker/dev/docker-compose-integration-test.yml up -d
 #      - name: Initialize tests
