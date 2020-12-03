@@ -11,7 +11,8 @@ jobs:
     steps:
       - uses: actions/checkout@v2
         name: Checkout rucio source
-
+        with:
+          path: rucio
       - name: Checkout rucio containers repository
         uses: actions/checkout@v2
         with:
@@ -22,9 +23,9 @@ jobs:
         run: |
           pwd
           ls -la
-          sed -i "s/RUN git clone .*/COPY ..\/rucio \/tmp\/rucio/" $GITHUB_WORKSPACE/containers/dev/Dockerfile_py3
+          sed -i "s/RUN git clone .*/COPY ..\/rucio* \/tmp\/rucio/" $GITHUB_WORKSPACE/containers/dev/Dockerfile_py3
           cat $GITHUB_WORKSPACE/containers/dev/Dockerfile_py3
-#          docker build -t rucio-dev -f $GITHUB_WORKSPACE/containers/Dockerfile_py3 $GITHUB_WORKSPACE/containers
+          docker build -t rucio-dev -f $GITHUB_WORKSPACE/containers/dev/Dockerfile_py3 $GITHUB_WORKSPACE
 #      - name: Start containers
 #        run: docker-compose -f etc/docker/dev/docker-compose-integration-test.yml up -d
 #      - name: Initialize tests
