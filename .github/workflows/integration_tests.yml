@@ -24,9 +24,9 @@ jobs:
     needs: setup
     runs-on: ubuntu-latest
     strategy:
-    fail-fast: false
-    matrix:
-      cfg: ${{ fromJson(needs.setup.outputs.matrix) }}
+      fail-fast: false
+      matrix:
+        cfg: ${{ fromJson(needs.setup.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v2
       - name: Build images
