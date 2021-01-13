@@ -50,7 +50,7 @@ jobs:
           echo "::set-output name=images::$IMAGES"
       - name: Prepare Docker Compose
         shell: bash
-        run: echo ''{"matrix": ${{ toJson(matrix.cfg) }}, "images": ${{ steps.images.outputs.images }} }'''
+        run: 'echo ''{"matrix": ${{ toJson(matrix.cfg) }}, "images": ${{ steps.images.outputs.images }} }'''
 #          IMG=$(echo "${{ steps.images.outputs.images }}" | sed 's_/_\\/_g')
 #          sed "s/image: rucio\/rucio-dev/image: $IMG/" $GITHUB_WORKSPACE/dev/rucio/etc/docker/dev/docker-compose-storage.yml
 #      - name: Start containers
