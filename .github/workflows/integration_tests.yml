@@ -16,36 +16,38 @@ jobs:
         run: python3 -m pip install -U PyYAML
       - name: Identify Matrix
         id: matrix
-        run: echo "::set-output name=matrix::$(jq '.[]  | select(.SUITE=="integration-test")' <<< $(./tools/test/matrix_parser.py < ./etc/docker/test/matrix.yml))"
+        run: echo "::set-output name=matrix::$(jq '[.[]  | select(.SUITE=="integration-test")' <<< $(./tools/test/matrix_parser.py < ./etc/docker/test/matrix.yml))]"
     outputs:
       matrix: ${{ steps.matrix.outputs.matrix }}
 
   integration-tests:
     needs: setup
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        cfg: ${{ fromJson(needs.setup.outputs.matrix) }}
+#    strategy:
+#      fail-fast: false
+#      matrix:
+#        cfg: ${{ fromJson(needs.setup.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v2
       - name: Build images
         id: images
         shell: bash
         run: |
-          docker login https://docker.pkg.github.com -u ${{ github.actor }} -p ${{ secrets.GITHUB_TOKEN }}
-          i=0; until [ "$i" -ge 3 ]; do
-            IMAGES=$(echo '${{ toJson(matrix.cfg) }}' | ./tools/test/build_images.py \
-                --cache-repo docker.pkg.github.com/${{ github.repository }} ./etc/docker/test || echo "")
-            if [[ -n $IMAGES ]]; then break;
-            else
-              i=$((i+1)); sleep 5;
-              echo "::warning::Building images failed, retrying…"
-            fi
-          done
-          docker logout https://docker.pkg.github.com
-          if [[ -z $IMAGES ]]; then exit 1; fi
-          echo "::set-output name=images::$IMAGES"
+          echo "${{ needs.setup.outputs.matrix }}"
+#        run: |
+#          docker login https://docker.pkg.github.com -u ${{ github.actor }} -p ${{ secrets.GITHUB_TOKEN }}
+#          i=0; until [ "$i" -ge 3 ]; do
+#            IMAGES=$(echo '${{ toJson(matrix.cfg) }}' | ./tools/test/build_images.py \
+#                --cache-repo docker.pkg.github.com/${{ github.repository }} ./etc/docker/test || echo "")
+#            if [[ -n $IMAGES ]]; then break;
+#            else
+#              i=$((i+1)); sleep 5;
+#              echo "::warning::Building images failed, retrying…"
+#            fi
+#          done
+#          docker logout https://docker.pkg.github.com
+#          if [[ -z $IMAGES ]]; then exit 1; fi
+#          echo "::set-output name=images::$IMAGES"
 #    steps:
 #      - name: Checkout rucio containers repository
 #        uses: actions/checkout@v2
