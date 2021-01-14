@@ -102,7 +102,7 @@ def main():
 
     images = dict()
     images.update(build_images(integration_tests, script_args, 'integration-test'))
-    iamges.update(build_images(autotests, script_args, 'autotest'))
+    images.update(build_images(autotests, script_args, 'autotest'))
     if script_args.output == 'dict':
         json.dump(images, sys.stdout)
     elif script_args.output == 'list':
