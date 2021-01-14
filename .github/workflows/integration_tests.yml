@@ -52,6 +52,14 @@ jobs:
         shell: bash
         run: |
           docker image ls
+          echo "****"
+          echo "${{ github.actor }}"
+          echo "****"
+          echo "${{ github.repository }}"
+          echo "****"
+          docker image ls --filter "reference=docker.pkg.github.com/${{ github.actor }}/${{ github.repository }}/rucio-integration-test"
+          echo "****"
+          docker image ls --filter "reference=docker.pkg.github.com/${{ github.repository }}/rucio-integration-test"
 #          echo ''{"matrix": ${{ toJson(matrix.cfg) }}, "images": ${{ steps.images.outputs.images }} }''
 #          IMG=$(echo "${{ steps.images.outputs.images }}" | sed 's_/_\\/_g')
 #          sed "s/image: rucio\/rucio-dev/image: $IMG/" $GITHUB_WORKSPACE/dev/rucio/etc/docker/dev/docker-compose-storage.yml
