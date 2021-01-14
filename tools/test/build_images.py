@@ -32,7 +32,14 @@ BUILD_ARG_KEYS = ["PYTHON"]
 BuildArgs = collections.namedtuple('BuildArgs', BUILD_ARG_KEYS)
 
 
-def build_images():
+def build_images(matrix, script_args, test_mode):
+    filter_build_args = partial(map,
+                                lambda argdict: {arg: val for arg, val in argdict.items() if arg in BUILD_ARG_KEYS})
+    make_buildargs = partial(map, lambda argdict: BuildArgs(**argdict))
+    distribution_buildargs = {dist: (set(make_buildargs(filter_build_args(args)))) for dist, args in
+                              itertools.groupby(matrix, lambda d: d[DIST_KEY])}
+
+    use_podman = 'USE_PODMAN' in os.environ and os.environ['USE_PODMAN'] == '1'
     images = dict()
     for dist, buildargs_list in distribution_buildargs.items():
         for buildargs in buildargs_list:
@@ -40,67 +47,106 @@ def build_images():
                                           buildargs._asdict().items()))
             if buildargs_tags:
                 buildargs_tags = '-' + buildargs_tags
-            imagetag = f'rucio-autotest:{dist.lower()}{buildargs_tags}'
+            imagetag = f'rucio-{test_mode}:{dist.lower()}{buildargs_tags}'
             if script_args.cache_repo:
                 imagetag = script_args.cache_repo.lower() + '/' + imagetag
-
+            print(buildargs_list)
             cache_args = ()
             if script_args.build_no_cache:
                 cache_args = ('--no-cache', '--pull-always' if use_podman else '--pull')
             elif script_args.cache_repo:
                 args = ('docker', 'pull', imagetag)
                 print("Running", " ".join(args), file=sys.stderr)
-                subprocess.run(args, stdout=sys.stderr, check=False)
+                # subprocess.run(args, stdout=sys.stderr, check=False)
                 cache_args = ('--cache-from', imagetag)
 
             buildfile = pathlib.Path(script_args.buildfiles_dir) / f'{dist}.Dockerfile'
             args = ('docker', 'build', *cache_args, '--file', str(buildfile), '--tag', imagetag,
                     *itertools.chain(*map(lambda x: ('--build-arg', f'{x[0]}={x[1]}'), buildargs._asdict().items())),
                     '.')
+
             print("Running", " ".join(args), file=sys.stderr)
-            subprocess.run(args, stdout=sys.stderr, check=True)
+            # subprocess.run(args, stdout=sys.stderr, check=True)
             print("Finished building image", imagetag, file=sys.stderr)
 
             if script_args.push_cache:
                 args = ('docker', 'push', imagetag)
                 print("Running", " ".join(args), file=sys.stderr)
-                subprocess.run(args, stdout=sys.stderr, check=True)
+                # subprocess.run(args, stdout=sys.stderr, check=True)
 
             images[imagetag] = {DIST_KEY: dist, **buildargs._asdict()}
+
     return images
 
 
 def main():
-    matrix = json.load(sys.stdin)
+    matrix = json.loads('[{"DIST": "centos7", "PYTHON": "2.7", "SUITE": "client_syntax", "RUN_HTTPD": false}, '
+                        '{"DIST": "centos7", "PYTHON": "2.7", "SUITE": "client", "RDBMS": "sqlite"}, '
+                        '{"DIST": "centos7", "PYTHON": "3.6", "SUITE": "syntax", "SYNTAX_REPORT": 1, "RUN_HTTPD": '
+                        'false}, {"DIST": "centos7", "PYTHON": "3.6", "SUITE": "client", "RDBMS": "sqlite"}, '
+                        '{"DIST": "centos7", "PYTHON": "3.6", "SUITE": "all", "RDBMS": "oracle", "REST_BACKEND": '
+                        '"webpy"}, {"DIST": "centos7", "PYTHON": "3.6", "SUITE": "all", "RDBMS": "oracle", '
+                        '"REST_BACKEND": "flask"}, {"DIST": "centos7", "PYTHON": "3.6", "SUITE": "all", '
+                        '"RDBMS": "mysql5", "REST_BACKEND": "webpy"}, {"DIST": "centos7", "PYTHON": "3.6", '
+                        '"SUITE": "all", "RDBMS": "mysql8", "REST_BACKEND": "webpy"}, {"DIST": "centos7", '
+                        '"PYTHON": "3.6", "SUITE": "all", "RDBMS": "mysql8", "REST_BACKEND": "flask"}, '
+                        '{"DIST": "centos7", "PYTHON": "3.6", "SUITE": "all", "RDBMS": "postgres9", "REST_BACKEND": '
+                        '"webpy"}, {"DIST": "centos7", "PYTHON": "3.6", "SUITE": "all", "RDBMS": "postgres12", '
+                        '"REST_BACKEND": "webpy"}, {"DIST": "centos7", "PYTHON": "3.6", "SUITE": "all", '
+                        '"RDBMS": "sqlite", "REST_BACKEND": "webpy"}, {"DIST": "centos7", "PYTHON": "3.6", '
+                        '"SUITE": "multi_vo", "RDBMS": "postgres12", "REST_BACKEND": "webpy"}, {"DIST": "centos7", '
+                        '"PYTHON": "3.6", "SUITE": "multi_vo", "RDBMS": "postgres12", "REST_BACKEND": "flask"}, '
+                        '{"DIST": "centos7", "PYTHON": "3.6", "SUITE": "integration-test"}, {"DIST": "centos7", '
+                        '"PYTHON": "3.7", "SUITE": "syntax", "SYNTAX_REPORT": 1, "RUN_HTTPD": false}, '
+                        '{"DIST": "centos7", "PYTHON": "3.7", "SUITE": "client", "RDBMS": "sqlite"}, '
+                        '{"DIST": "centos7", "PYTHON": "3.7", "SUITE": "all", "RDBMS": "oracle", "REST_BACKEND": '
+                        '"webpy"}, {"DIST": "centos7", "PYTHON": "3.7", "SUITE": "all", "RDBMS": "oracle", '
+                        '"REST_BACKEND": "flask"}, {"DIST": "centos7", "PYTHON": "3.7", "SUITE": "all", '
+                        '"RDBMS": "mysql5", "REST_BACKEND": "webpy"}, {"DIST": "centos7", "PYTHON": "3.7", '
+                        '"SUITE": "all", "RDBMS": "mysql8", "REST_BACKEND": "webpy"}, {"DIST": "centos7", '
+                        '"PYTHON": "3.7", "SUITE": "all", "RDBMS": "mysql8", "REST_BACKEND": "flask"}, '
+                        '{"DIST": "centos7", "PYTHON": "3.7", "SUITE": "all", "RDBMS": "postgres9", "REST_BACKEND": '
+                        '"webpy"}, {"DIST": "centos7", "PYTHON": "3.7", "SUITE": "all", "RDBMS": "postgres12", '
+                        '"REST_BACKEND": "webpy"}, {"DIST": "centos7", "PYTHON": "3.7", "SUITE": "all", '
+                        '"RDBMS": "sqlite", "REST_BACKEND": "webpy"}, {"DIST": "centos7", "PYTHON": "3.7", '
+                        '"SUITE": "multi_vo", "RDBMS": "postgres12", "REST_BACKEND": "webpy"}, {"DIST": "centos7", '
+                        '"PYTHON": "3.7", "SUITE": "multi_vo", "RDBMS": "postgres12", "REST_BACKEND": "flask"}, '
+                        '{"DIST": "centos7", "PYTHON": "3.7", "SUITE": "integration-test"}]')
+    matrix = (matrix,) if isinstance(matrix, dict) else matrix
     print(matrix)
-    # matrix = (matrix,) if isinstance(matrix, dict) else matrix
-    #
-    # parser = argparse.ArgumentParser(description='Build images according to the test matrix read from stdin.')
-    # parser.add_argument('buildfiles_dir', metavar='build directory', type=str, default='.',
-    #                     help='the directory of Dockerfiles')
-    # parser.add_argument('-o', '--output', dest='output', type=str, choices=['list', 'dict'], default='dict',
-    #                     help='the output of this command')
-    # parser.add_argument('-n', '--build-no-cache', dest='build_no_cache', action='store_true',
-    #                     help='build images without cache')
-    # parser.add_argument('-r', '--cache-repo', dest='cache_repo', type=str, default='docker.pkg.github.com/rucio/rucio',
-    #                     help='use the following cache repository, like docker.pkg.github.com/USER/REPO')
-    # parser.add_argument('-p', '--push-cache', dest='push_cache', action='store_true',
-    #                     help='push the images to the cache repo')
-    # script_args = parser.parse_args()
-    #
-    # filter_build_args = partial(map,
-    #                             lambda argdict: {arg: val for arg, val in argdict.items() if arg in BUILD_ARG_KEYS})
-    # make_buildargs = partial(map, lambda argdict: BuildArgs(**argdict))
-    # distribution_buildargs = {dist: set(make_buildargs(filter_build_args(args))) for dist, args in
-    #                           itertools.groupby(matrix, lambda d: d[DIST_KEY])}
-    # use_podman = 'USE_PODMAN' in os.environ and os.environ['USE_PODMAN'] == '1'
-    #
-    # images = build_images()
-    #
-    # if script_args.output == 'dict':
-    #     json.dump(images, sys.stdout)
-    # elif script_args.output == 'list':
-    #     json.dump(list(images.keys()), sys.stdout)
+
+    parser = argparse.ArgumentParser(description='Build images according to the test matrix read from stdin.')
+    parser.add_argument('buildfiles_dir', metavar='build directory', type=str, default='.',
+                        help='the directory of Dockerfiles')
+    parser.add_argument('-o', '--output', dest='output', type=str, choices=['list', 'dict'], default='dict',
+                        help='the output of this command')
+    parser.add_argument('-n', '--build-no-cache', dest='build_no_cache', action='store_true',
+                        help='build images without cache')
+    parser.add_argument('-r', '--cache-repo', dest='cache_repo', type=str, default='docker.pkg.github.com/rucio/rucio',
+                        help='use the following cache repository, like docker.pkg.github.com/USER/REPO')
+    parser.add_argument('-p', '--push-cache', dest='push_cache', action='store_true',
+                        help='push the images to the cache repo')
+    script_args = parser.parse_args()
+
+    filter_build_args = partial(map,
+                                lambda argdict: {arg: val for arg, val in argdict.items() if arg in BUILD_ARG_KEYS})
+    make_buildargs = partial(map, lambda argdict: BuildArgs(**argdict))
+    distribution_buildargs = {dist: set(make_buildargs(filter_build_args(args))) for dist, args in
+                              itertools.groupby(matrix, lambda d: d[DIST_KEY])}
+    use_podman = 'USE_PODMAN' in os.environ and os.environ['USE_PODMAN'] == '1'
+
+    integration_tests, autotests = [], []
+    for x in matrix:
+        autotests.append(x) if x['SUITE'] != 'integration-test' else integration_tests.append(x)
+    images = dict()
+    autotest_images = build_images(matrix, script_args, test_mode='autotest')
+    integration_test_images = build_images(matrix, script_args, test_mode='integration-test')
+    images.update(autotest_images)
+    images.update(integration_test_images)
+    if script_args.output == 'dict':
+        json.dump(images, sys.stdout)
+    elif script_args.output == 'list':
+        json.dump(list(images.keys()), sys.stdout)
 
 
 if __name__ == "__main__":
