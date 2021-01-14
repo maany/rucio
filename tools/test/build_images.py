@@ -57,7 +57,7 @@ def build_images(matrix, script_args, test_mode):
             elif script_args.cache_repo:
                 args = ('docker', 'pull', imagetag)
                 print("Running", " ".join(args), file=sys.stderr)
-                # subprocess.run(args, stdout=sys.stderr, check=False)
+                subprocess.run(args, stdout=sys.stderr, check=False)
                 cache_args = ('--cache-from', imagetag)
 
             buildfile = pathlib.Path(script_args.buildfiles_dir) / f'{dist}.Dockerfile'
@@ -66,20 +66,17 @@ def build_images(matrix, script_args, test_mode):
                     '.')
 
             print("Running", " ".join(args), file=sys.stderr)
-            # subprocess.run(args, stdout=sys.stderr, check=True)
+            subprocess.run(args, stdout=sys.stderr, check=True)
             print("Finished building image", imagetag, file=sys.stderr)
 
             if script_args.push_cache:
                 args = ('docker', 'push', imagetag)
                 print("Running", " ".join(args), file=sys.stderr)
-                # subprocess.run(args, stdout=sys.stderr, check=True)
+                subprocess.run(args, stdout=sys.stderr, check=True)
 
             images[imagetag] = {DIST_KEY: dist, **buildargs._asdict()}
 
-    if script_args.output == 'dict':
-        json.dump(images, sys.stdout)
-    elif script_args.output == 'list':
-        json.dump(list(images.keys()), sys.stdout)
+    return images
 
 
 def main():
@@ -103,8 +100,13 @@ def main():
     for x in matrix:
         autotests.append(x) if x['SUITE'] != 'integration-test' else integration_tests.append(x)
 
-    build_images(integration_tests, script_args, 'integration-test')
-    build_images(autotests, script_args, 'autotest')
+    images = dict()
+    images.update(build_images(integration_tests, script_args, 'integration-test'))
+    iamges.update(build_images(autotests, script_args, 'autotest'))
+    if script_args.output == 'dict':
+        json.dump(images, sys.stdout)
+    elif script_args.output == 'list':
+        json.dump(list(images.keys()), sys.stdout)
 
 
 if __name__ == "__main__":
