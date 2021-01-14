@@ -51,7 +51,7 @@ jobs:
           echo "$IMAGES"
       - name: Run test with cfg
         run: |
-           echo ''{"matrix": ${{ toJson(matrix.cfg) }}, "images": ${{ steps.images.outputs.images }} }''
+           echo '{"matrix": ${{ toJson(matrix.cfg) }}, "images": ${{ steps.images.outputs.images }} }'
 #         'echo ''{"matrix": ${{ toJson(matrix.cfg) }}, "images": ${{ steps.images.outputs.images }} }'' | ./tools/test/run_tests.py'
 #  release-patch-setup:
 #    if: 'github.event_name == ''pull_request'' && !startsWith(github.event.pull_request.base.ref, ''release'') && !startsWith(github.event.pull_request.head.ref, ''feature'')'

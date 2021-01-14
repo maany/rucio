@@ -50,7 +50,7 @@ def build_images(matrix, script_args, test_mode):
             imagetag = f'rucio-{test_mode}:{dist.lower()}{buildargs_tags}'
             if script_args.cache_repo:
                 imagetag = script_args.cache_repo.lower() + '/' + imagetag
-            print(buildargs_list)
+            #print(buildargs_list)
             cache_args = ()
             if script_args.build_no_cache:
                 cache_args = ('--no-cache', '--pull-always' if use_podman else '--pull')
@@ -80,39 +80,39 @@ def build_images(matrix, script_args, test_mode):
 
 
 def main():
-    # matrix = json.loads('[{"DIST": "centos7", "PYTHON": "2.7", "SUITE": "client_syntax", "RUN_HTTPD": false}, '
-    #                     '{"DIST": "centos7", "PYTHON": "2.7", "SUITE": "client", "RDBMS": "sqlite"}, '
-    #                     '{"DIST": "centos7", "PYTHON": "3.6", "SUITE": "syntax", "SYNTAX_REPORT": 1, "RUN_HTTPD": '
-    #                     'false}, {"DIST": "centos7", "PYTHON": "3.6", "SUITE": "client", "RDBMS": "sqlite"}, '
-    #                     '{"DIST": "centos7", "PYTHON": "3.6", "SUITE": "all", "RDBMS": "oracle", "REST_BACKEND": '
-    #                     '"webpy"}, {"DIST": "centos7", "PYTHON": "3.6", "SUITE": "all", "RDBMS": "oracle", '
-    #                     '"REST_BACKEND": "flask"}, {"DIST": "centos7", "PYTHON": "3.6", "SUITE": "all", '
-    #                     '"RDBMS": "mysql5", "REST_BACKEND": "webpy"}, {"DIST": "centos7", "PYTHON": "3.6", '
-    #                     '"SUITE": "all", "RDBMS": "mysql8", "REST_BACKEND": "webpy"}, {"DIST": "centos7", '
-    #                     '"PYTHON": "3.6", "SUITE": "all", "RDBMS": "mysql8", "REST_BACKEND": "flask"}, '
-    #                     '{"DIST": "centos7", "PYTHON": "3.6", "SUITE": "all", "RDBMS": "postgres9", "REST_BACKEND": '
-    #                     '"webpy"}, {"DIST": "centos7", "PYTHON": "3.6", "SUITE": "all", "RDBMS": "postgres12", '
-    #                     '"REST_BACKEND": "webpy"}, {"DIST": "centos7", "PYTHON": "3.6", "SUITE": "all", '
-    #                     '"RDBMS": "sqlite", "REST_BACKEND": "webpy"}, {"DIST": "centos7", "PYTHON": "3.6", '
-    #                     '"SUITE": "multi_vo", "RDBMS": "postgres12", "REST_BACKEND": "webpy"}, {"DIST": "centos7", '
-    #                     '"PYTHON": "3.6", "SUITE": "multi_vo", "RDBMS": "postgres12", "REST_BACKEND": "flask"}, '
-    #                     '{"DIST": "centos7", "PYTHON": "3.6", "SUITE": "integration-test"}, {"DIST": "centos7", '
-    #                     '"PYTHON": "3.7", "SUITE": "syntax", "SYNTAX_REPORT": 1, "RUN_HTTPD": false}, '
-    #                     '{"DIST": "centos7", "PYTHON": "3.7", "SUITE": "client", "RDBMS": "sqlite"}, '
-    #                     '{"DIST": "centos7", "PYTHON": "3.7", "SUITE": "all", "RDBMS": "oracle", "REST_BACKEND": '
-    #                     '"webpy"}, {"DIST": "centos7", "PYTHON": "3.7", "SUITE": "all", "RDBMS": "oracle", '
-    #                     '"REST_BACKEND": "flask"}, {"DIST": "centos7", "PYTHON": "3.7", "SUITE": "all", '
-    #                     '"RDBMS": "mysql5", "REST_BACKEND": "webpy"}, {"DIST": "centos7", "PYTHON": "3.7", '
-    #                     '"SUITE": "all", "RDBMS": "mysql8", "REST_BACKEND": "webpy"}, {"DIST": "centos7", '
-    #                     '"PYTHON": "3.7", "SUITE": "all", "RDBMS": "mysql8", "REST_BACKEND": "flask"}, '
-    #                     '{"DIST": "centos7", "PYTHON": "3.7", "SUITE": "all", "RDBMS": "postgres9", "REST_BACKEND": '
-    #                     '"webpy"}, {"DIST": "centos7", "PYTHON": "3.7", "SUITE": "all", "RDBMS": "postgres12", '
-    #                     '"REST_BACKEND": "webpy"}, {"DIST": "centos7", "PYTHON": "3.7", "SUITE": "all", '
-    #                     '"RDBMS": "sqlite", "REST_BACKEND": "webpy"}, {"DIST": "centos7", "PYTHON": "3.7", '
-    #                     '"SUITE": "multi_vo", "RDBMS": "postgres12", "REST_BACKEND": "webpy"}, {"DIST": "centos7", '
-    #                     '"PYTHON": "3.7", "SUITE": "multi_vo", "RDBMS": "postgres12", "REST_BACKEND": "flask"}, '
-    #                     '{"DIST": "centos7", "PYTHON": "3.7", "SUITE": "integration-test"}]')
-    matrix = json.load(sys.stdin)
+    matrix = json.loads('{"DIST": "centos7", "PYTHON": "2.7", "SUITE": "client_syntax", "RUN_HTTPD": false}')#, '
+                        # '{"DIST": "centos7", "PYTHON": "2.7", "SUITE": "client", "RDBMS": "sqlite"}, '
+                        # '{"DIST": "centos7", "PYTHON": "3.6", "SUITE": "syntax", "SYNTAX_REPORT": 1, "RUN_HTTPD": '
+                        # 'false}, {"DIST": "centos7", "PYTHON": "3.6", "SUITE": "client", "RDBMS": "sqlite"}, '
+                        # '{"DIST": "centos7", "PYTHON": "3.6", "SUITE": "all", "RDBMS": "oracle", "REST_BACKEND": '
+                        # '"webpy"}, {"DIST": "centos7", "PYTHON": "3.6", "SUITE": "all", "RDBMS": "oracle", '
+                        # '"REST_BACKEND": "flask"}, {"DIST": "centos7", "PYTHON": "3.6", "SUITE": "all", '
+                        # '"RDBMS": "mysql5", "REST_BACKEND": "webpy"}, {"DIST": "centos7", "PYTHON": "3.6", '
+                        # '"SUITE": "all", "RDBMS": "mysql8", "REST_BACKEND": "webpy"}, {"DIST": "centos7", '
+                        # '"PYTHON": "3.6", "SUITE": "all", "RDBMS": "mysql8", "REST_BACKEND": "flask"}, '
+                        # '{"DIST": "centos7", "PYTHON": "3.6", "SUITE": "all", "RDBMS": "postgres9", "REST_BACKEND": '
+                        # '"webpy"}, {"DIST": "centos7", "PYTHON": "3.6", "SUITE": "all", "RDBMS": "postgres12", '
+                        # '"REST_BACKEND": "webpy"}, {"DIST": "centos7", "PYTHON": "3.6", "SUITE": "all", '
+                        # '"RDBMS": "sqlite", "REST_BACKEND": "webpy"}, {"DIST": "centos7", "PYTHON": "3.6", '
+                        # '"SUITE": "multi_vo", "RDBMS": "postgres12", "REST_BACKEND": "webpy"}, {"DIST": "centos7", '
+                        # '"PYTHON": "3.6", "SUITE": "multi_vo", "RDBMS": "postgres12", "REST_BACKEND": "flask"}, '
+                        # '{"DIST": "centos7", "PYTHON": "3.6", "SUITE": "integration-test"}, {"DIST": "centos7", '
+                        # '"PYTHON": "3.7", "SUITE": "syntax", "SYNTAX_REPORT": 1, "RUN_HTTPD": false}, '
+                        # '{"DIST": "centos7", "PYTHON": "3.7", "SUITE": "client", "RDBMS": "sqlite"}, '
+                        # '{"DIST": "centos7", "PYTHON": "3.7", "SUITE": "all", "RDBMS": "oracle", "REST_BACKEND": '
+                        # '"webpy"}, {"DIST": "centos7", "PYTHON": "3.7", "SUITE": "all", "RDBMS": "oracle", '
+                        # '"REST_BACKEND": "flask"}, {"DIST": "centos7", "PYTHON": "3.7", "SUITE": "all", '
+                        # '"RDBMS": "mysql5", "REST_BACKEND": "webpy"}, {"DIST": "centos7", "PYTHON": "3.7", '
+                        # '"SUITE": "all", "RDBMS": "mysql8", "REST_BACKEND": "webpy"}, {"DIST": "centos7", '
+                        # '"PYTHON": "3.7", "SUITE": "all", "RDBMS": "mysql8", "REST_BACKEND": "flask"}, '
+                        # '{"DIST": "centos7", "PYTHON": "3.7", "SUITE": "all", "RDBMS": "postgres9", "REST_BACKEND": '
+                        # '"webpy"}, {"DIST": "centos7", "PYTHON": "3.7", "SUITE": "all", "RDBMS": "postgres12", '
+                        # '"REST_BACKEND": "webpy"}, {"DIST": "centos7", "PYTHON": "3.7", "SUITE": "all", '
+                        # '"RDBMS": "sqlite", "REST_BACKEND": "webpy"}, {"DIST": "centos7", "PYTHON": "3.7", '
+                        # '"SUITE": "multi_vo", "RDBMS": "postgres12", "REST_BACKEND": "webpy"}, {"DIST": "centos7", '
+                        # '"PYTHON": "3.7", "SUITE": "multi_vo", "RDBMS": "postgres12", "REST_BACKEND": "flask"}, '
+                        # '{"DIST": "centos7", "PYTHON": "3.7", "SUITE": "integration-test"}')
+    # matrix = json.load(sys.stdin)
     matrix = (matrix,) if isinstance(matrix, dict) else matrix
     print(matrix)
 
