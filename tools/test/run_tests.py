@@ -85,12 +85,6 @@ def main():
     obj = json.load(sys.stdin)
     print(obj)
     print("*********")
-  #   obj = json.loads({"matrix": { \
-  #    "DIST": "centos7", \
-  #   "PYTHON": "2.7",
-  #   "SUITE": "client_syntax",
-  #   "RUN_HTTPD": false
-  # }, "images": {"docker.pkg.github.com/maany/rucio/rucio-autotest:centos7-python3.7": {"DIST": "centos7", "PYTHON": "3.7", "IMAGE_IDENTIFIER": "autotest"}, "docker.pkg.github.com/maany/rucio/rucio-autotest:centos7-python2.7": {"DIST": "centos7", "PYTHON": "2.7", "IMAGE_IDENTIFIER": "autotest"}, "docker.pkg.github.com/maany/rucio/rucio-autotest:centos7-python3.6": {"DIST": "centos7", "PYTHON": "3.6", "IMAGE_IDENTIFIER": "autotest"}} }')
     cases = (obj["matrix"],) if isinstance(obj["matrix"], dict) else obj["matrix"]
     use_podman = 'USE_PODMAN' in os.environ and os.environ['USE_PODMAN'] == '1'
     parallel = 'PARALLEL_AUTOTESTS' in os.environ and os.environ['PARALLEL_AUTOTESTS'] == '1'
