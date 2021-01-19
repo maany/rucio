@@ -52,7 +52,7 @@ jobs:
         shell: bash
         run: |
           docker image ls
-          IMG=$(docker image ls -q --filter "reference=docker.pkg.github.com/${{ github.repository }}/rucio-integration-test")
+          IMG=$(docker image ls -q --filter "reference=docker.pkg.github.com/${{ github.repository }}/rucio-integration-test" | head -1)
           echo "$IMG"
           sed -i "s/image: rucio\/rucio-dev.*/image: $IMG/" $GITHUB_WORKSPACE/etc/docker/dev/docker-compose-storage.yml
       - name: Start containers
