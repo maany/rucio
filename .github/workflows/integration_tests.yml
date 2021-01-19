@@ -51,8 +51,9 @@ jobs:
       - name: Prepare Docker Compose
         shell: bash
         run: |
+          docker image ls
           IMG=$(docker image ls -q --filter "reference=docker.pkg.github.com/${{ github.repository }}/rucio-integration-test")
-          echo("$IMG")
+          echo "$IMG"
           sed -i "s/image: rucio\/rucio-dev.*/image: $IMG/" $GITHUB_WORKSPACE/etc/docker/dev/docker-compose-storage.yml
       - name: Start containers
         run: docker-compose -f $GITHUB_WORKSPACE/etc/docker/dev/docker-compose-storage.yml up -d
