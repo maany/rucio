@@ -28,15 +28,15 @@ import sys
 from functools import partial
 
 DIST_KEY = "DIST"
-BUILD_ARG_KEYS = ["PYTHON", "image_identifier"]
+BUILD_ARG_KEYS = ["PYTHON", "IMAGE_IDENTIFIER"]
 BuildArgs = collections.namedtuple('BuildArgs', BUILD_ARG_KEYS)
 
 
 def add_image_identifier(grouped_args):
     for dist, args in grouped_args:
         for arg in args:
-            if "image_identifier" not in arg:
-                arg['image_identifier'] = 'autotest'
+            if "IMAGE_IDENTIFIER" not in arg:
+                arg['IMAGE_IDENTIFIER'] = 'autotest'
     return grouped_args
 
 
@@ -54,12 +54,12 @@ def build_images(matrix, script_args):
     for dist, buildargs_list in distribution_buildargs.items():
         for buildargs in buildargs_list:
             filtered_buildargs = buildargs._asdict()
-            del filtered_buildargs['image_identifier']
+            del filtered_buildargs['IMAGE_IDENTIFIER']
             buildargs_tags = '-'.join(map(lambda it: str(it[0]).lower() + str(it[1]).lower(),
                                           filtered_buildargs.items()))
             if buildargs_tags:
                 buildargs_tags = '-' + buildargs_tags
-            imagetag = f'rucio-{buildargs.image_identifier}:{dist.lower()}{buildargs_tags}'
+            imagetag = f'rucio-{buildargs.IMAGE_IDENTIFIER}:{dist.lower()}{buildargs_tags}'
             if script_args.cache_repo:
                 imagetag = script_args.cache_repo.lower() + '/' + imagetag
             cache_args = ()
@@ -68,7 +68,7 @@ def build_images(matrix, script_args):
             elif script_args.cache_repo:
                 args = ('docker', 'pull', imagetag)
                 print("Running", " ".join(args), file=sys.stderr)
-                subprocess.run(args, stdout=sys.stderr, check=False)
+                #subprocess.run(args, stdout=sys.stderr, check=False)
                 cache_args = ('--cache-from', imagetag)
 
             buildfile = pathlib.Path(script_args.buildfiles_dir) / f'{dist}.Dockerfile'
@@ -77,13 +77,13 @@ def build_images(matrix, script_args):
                     '.')
 
             print("Running", " ".join(args), file=sys.stderr)
-            subprocess.run(args, stdout=sys.stderr, check=True)
+            #subprocess.run(args, stdout=sys.stderr, check=True)
             print("Finished building image", imagetag, file=sys.stderr)
 
             if script_args.push_cache:
                 args = ('docker', 'push', imagetag)
                 print("Running", " ".join(args), file=sys.stderr)
-                subprocess.run(args, stdout=sys.stderr, check=True)
+                #subprocess.run(args, stdout=sys.stderr, check=True)
 
             images[imagetag] = {DIST_KEY: dist, **buildargs._asdict()}
 
@@ -91,7 +91,37 @@ def build_images(matrix, script_args):
 
 
 def main():
-    matrix = json.load(sys.stdin)
+    # matrix = json.load(sys.stdin)
+    matrix = json.loads('[{"DIST": "centos7", "PYTHON": "2.7", "SUITE": "client_syntax", "RUN_HTTPD": false}, '
+                        '{"DIST": "centos7", "PYTHON": "2.7", "SUITE": "client", "RDBMS": "sqlite"}, '
+                        '{"DIST": "centos7", "PYTHON": "3.6", "SUITE": "syntax", "SYNTAX_REPORT": 1, "RUN_HTTPD": '
+                        'false}, {"DIST": "centos7", "PYTHON": "3.6", "SUITE": "client", "RDBMS": "sqlite"}, '
+                        '{"DIST": "centos7", "PYTHON": "3.6", "SUITE": "all", "RDBMS": "oracle", "REST_BACKEND": '
+                        '"webpy"}, {"DIST": "centos7", "PYTHON": "3.6", "SUITE": "all", "RDBMS": "oracle", '
+                        '"REST_BACKEND": "flask"}, {"DIST": "centos7", "PYTHON": "3.6", "SUITE": "all", '
+                        '"RDBMS": "mysql5", "REST_BACKEND": "webpy"}, {"DIST": "centos7", "PYTHON": "3.6", '
+                        '"SUITE": "all", "RDBMS": "mysql8", "REST_BACKEND": "webpy"}, {"DIST": "centos7", '
+                        '"PYTHON": "3.6", "SUITE": "all", "RDBMS": "mysql8", "REST_BACKEND": "flask"}, '
+                        '{"DIST": "centos7", "PYTHON": "3.6", "SUITE": "all", "RDBMS": "postgres9", "REST_BACKEND": '
+                        '"webpy"}, {"DIST": "centos7", "PYTHON": "3.6", "SUITE": "all", "RDBMS": "postgres12", '
+                        '"REST_BACKEND": "webpy"}, {"DIST": "centos7", "PYTHON": "3.6", "SUITE": "all", '
+                        '"RDBMS": "sqlite", "REST_BACKEND": "webpy"}, {"DIST": "centos7", "PYTHON": "3.6", '
+                        '"SUITE": "multi_vo", "RDBMS": "postgres12", "REST_BACKEND": "webpy"}, {"DIST": "centos7", '
+                        '"PYTHON": "3.6", "SUITE": "multi_vo", "RDBMS": "postgres12", "REST_BACKEND": "flask"}, '
+                        '{"DIST": "centos7", "PYTHON": "3.7", "SUITE": "syntax", "SYNTAX_REPORT": 1, "RUN_HTTPD": '
+                        'false}, {"DIST": "centos7", "PYTHON": "3.7", "SUITE": "client", "RDBMS": "sqlite"}, '
+                        '{"DIST": "centos7", "PYTHON": "3.7", "SUITE": "all", "RDBMS": "oracle", "REST_BACKEND": '
+                        '"webpy"}, {"DIST": "centos7", "PYTHON": "3.7", "SUITE": "all", "RDBMS": "oracle", '
+                        '"REST_BACKEND": "flask"}, {"DIST": "centos7", "PYTHON": "3.7", "SUITE": "all", '
+                        '"RDBMS": "mysql5", "REST_BACKEND": "webpy"}, {"DIST": "centos7", "PYTHON": "3.7", '
+                        '"SUITE": "all", "RDBMS": "mysql8", "REST_BACKEND": "webpy"}, {"DIST": "centos7", '
+                        '"PYTHON": "3.7", "SUITE": "all", "RDBMS": "mysql8", "REST_BACKEND": "flask"}, '
+                        '{"DIST": "centos7", "PYTHON": "3.7", "SUITE": "all", "RDBMS": "postgres9", "REST_BACKEND": '
+                        '"webpy"}, {"DIST": "centos7", "PYTHON": "3.7", "SUITE": "all", "RDBMS": "postgres12", '
+                        '"REST_BACKEND": "webpy"}, {"DIST": "centos7", "PYTHON": "3.7", "SUITE": "all", '
+                        '"RDBMS": "sqlite", "REST_BACKEND": "webpy"}, {"DIST": "centos7", "PYTHON": "3.7", '
+                        '"SUITE": "multi_vo", "RDBMS": "postgres12", "REST_BACKEND": "webpy"}, {"DIST": "centos7", '
+                        '"PYTHON": "3.7", "SUITE": "multi_vo", "RDBMS": "postgres12", "REST_BACKEND": "flask"}]')
     matrix = (matrix,) if isinstance(matrix, dict) else matrix
 
     parser = argparse.ArgumentParser(description='Build images according to the test matrix read from stdin.')
