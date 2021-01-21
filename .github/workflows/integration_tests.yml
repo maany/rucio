@@ -45,6 +45,7 @@ jobs:
         id: images
         shell: bash
         run: |
+          ls -la
           docker login https://docker.pkg.github.com -u ${{ github.actor }} -p ${{ secrets.GITHUB_TOKEN }}
           i=0; until [ "$i" -ge 3 ]; do
             IMAGES=$(echo '${{ toJson(matrix.cfg) }}' | $GITHUB_WORKSPACE/dev/tools/test/build_images.py \
