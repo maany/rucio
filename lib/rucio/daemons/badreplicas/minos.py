@@ -108,12 +108,12 @@ def minos(bulk=1000, once=False, sleep_time=60):
                 account = pfn['account']
                 reason = pfn['reason']
                 expires_at = pfn['expires_at']
-                state = pfn['state']
-                if states_mapping[state] in [BadFilesStatus.BAD, BadFilesStatus.SUSPICIOUS]:
+                state = states_mapping[pfn['state']]
+                if state in [BadFilesStatus.BAD, BadFilesStatus.SUSPICIOUS]:
                     if (account, reason, state) not in bad_replicas:
                         bad_replicas[(account, reason, state)] = []
                     bad_replicas[(account, reason, state)].append(path)
-                if states_mapping[state] == BadFilesStatus.TEMPORARY_UNAVAILABLE:
+                elif state == BadFilesStatus.TEMPORARY_UNAVAILABLE:
                     if (account, reason, expires_at) not in temporary_unvailables:
                         temporary_unvailables[(account, reason, expires_at)] = []
                     temporary_unvailables[(account, reason, expires_at)].append(path)
