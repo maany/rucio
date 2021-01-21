@@ -62,7 +62,7 @@ jobs:
         shell: bash
         run: |
           docker image ls
-          sed -i "s;image: rucio/rucio-dev.*;image: docker\.pkg\.github\.com/${{ github.repository }}/rucio-integration-test;" $GITHUB_WORKSPACE/dev/rucio/etc/docker/dev/docker-compose-storage.yml
+          sed -i "s;image: rucio/rucio-dev.*;image: docker\.pkg\.github\.com/${{ github.repository }}/rucio-integration-test:centos7-python3.6;" $GITHUB_WORKSPACE/dev/rucio/etc/docker/dev/docker-compose-storage.yml
       - name: Start containers
         run: |
           docker login https://docker.pkg.github.com -u ${{ github.actor }} -p ${{ secrets.GITHUB_TOKEN }}
