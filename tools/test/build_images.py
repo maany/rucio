@@ -75,7 +75,7 @@ def build_images(matrix, script_args):
                     args = ('docker', 'build', *cache_args, '--file', str(buildfile), '--tag', imagetag,
                             *itertools.chain(
                                 *map(lambda x: ('--build-arg', f'{x[0]}={x[1]}'), filtered_buildargs.items())),
-                            '/containers/dev/')
+                            f'{script_args.buildfiles_dir}')
             elif buildargs.IMAGE_IDENTIFIER == 'autotest':
                 buildfile = pathlib.Path(script_args.buildfiles_dir) / f'{dist}.Dockerfile'
                 args = ('docker', 'build', *cache_args, '--file', str(buildfile), '--tag', imagetag,
