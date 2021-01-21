@@ -37,7 +37,7 @@ jobs:
         name: Checkout rucio source
         with:
           path: dev/rucio
-      name: Use rucio/containers Dockerfile for integration tests
+      - name: Use rucio/containers Dockerfile for integration tests
         shell: bash
         run: |
           sed -i "s/RUN git clone .*/COPY .\/rucio \/tmp\/rucio/" $GITHUB_WORKSPACE/dev/Dockerfile_py3
