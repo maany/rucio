@@ -45,16 +45,6 @@ jobs:
         id: images
         shell: bash
         run: |
-          ls -la
-          echo "********"
-          pwd
-          echo "********"
-          echo $GITHUB_WORKSPACE
-          echo "********"
-          ls -la $GITHUB_WORKSPACE/dev
-          echo "********"
-          cat /home/runner/work/rucio/rucio/dev/Dockerfile_py3
-          echo "********"
           docker login https://docker.pkg.github.com -u ${{ github.actor }} -p ${{ secrets.GITHUB_TOKEN }}
           i=0; until [ "$i" -ge 3 ]; do
             IMAGES=$(echo '${{ toJson(matrix.cfg) }}' | $GITHUB_WORKSPACE/dev/rucio/tools/test/build_images.py \
@@ -71,7 +61,6 @@ jobs:
       - name: Prepare Docker Compose
         shell: bash
         run: |
-          docker image ls
           IMG=$(docker image ls -q --filter "reference=docker.pkg.github.com/${{ github.repository }}/rucio-integration-test" | head -1)
           echo "$IMG"
           sed -i "s/image: rucio\/rucio-dev.*/image: $IMG/" $GITHUB_WORKSPACE/dev/rucio/etc/docker/dev/docker-compose-storage.yml
@@ -87,4 +76,4 @@ jobs:
       - name: Test Protocol XrootD
         run: docker exec -t dev_rucio_1 python -bb -m pytest -vvvrxs lib/rucio/tests/test_rse_protocol_xrootd.py
       - name: Stop containers
-        run: docker-compose -f $GITHUB_WORKSPACE/etc/docker/dev/docker-compose-storage.yml down
+        run: docker-compose -f $GITHUB_WORKSPACE/dev/rucio/etc/docker/dev/docker-compose-storage.yml down
