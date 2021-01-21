@@ -46,9 +46,11 @@ jobs:
         shell: bash
         run: |
           ls -la
+          pwd
+          ls -la $GITHUB_WORKSPACE/dev
           docker login https://docker.pkg.github.com -u ${{ github.actor }} -p ${{ secrets.GITHUB_TOKEN }}
           i=0; until [ "$i" -ge 3 ]; do
-            IMAGES=$(echo '${{ toJson(matrix.cfg) }}' | $GITHUB_WORKSPACE/dev/tools/test/build_images.py \
+            IMAGES=$(echo '${{ toJson(matrix.cfg) }}' | $GITHUB_WORKSPACE/dev/rucio/tools/test/build_images.py \
                 --cache-repo docker.pkg.github.com/${{ github.repository }} $GITHUB_WORKSPACE/dev || echo "")
             if [[ -n $IMAGES ]]; then break;
             else
