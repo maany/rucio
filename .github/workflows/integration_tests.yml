@@ -46,8 +46,15 @@ jobs:
         shell: bash
         run: |
           ls -la
+          echo "********"
           pwd
+          echo "********"
+          echo $GITHUB_WORKSPACE
+          echo "********"
           ls -la $GITHUB_WORKSPACE/dev
+          echo "********"
+          cat /home/runner/work/rucio/rucio/dev/Dockerfile_py3
+          echo "********"
           docker login https://docker.pkg.github.com -u ${{ github.actor }} -p ${{ secrets.GITHUB_TOKEN }}
           i=0; until [ "$i" -ge 3 ]; do
             IMAGES=$(echo '${{ toJson(matrix.cfg) }}' | $GITHUB_WORKSPACE/dev/rucio/tools/test/build_images.py \
