@@ -13,6 +13,8 @@ from rucio.client.ruleclient import RuleClient
 from rucio.common.utils import run_cmd_process
 
 # Fixtures
+
+
 @pytest.fixture
 def did_factory(vo, test_scope):
     from rucio.tests.temp_factories import TemporaryDidFactory
@@ -37,9 +39,9 @@ def rse1(rse_factory):
     if rse is None:
         rse, rse_id = rse_factory.make_posix_rse()
     return {
-            'rse_name': rse,
-            'rse_id': rse_id,
-        }
+        'rse_name': rse,
+        'rse_id': rse_id,
+    }
 
 
 @pytest.fixture
@@ -48,11 +50,13 @@ def rse2(rse_factory):
     if rse is None:
         rse, rse_id = rse_factory.make_posix_rse()
     return {
-            'rse_name': rse,
-            'rse_id': rse_id,
-        }
+        'rse_name': rse,
+        'rse_id': rse_id,
+    }
 
 # Utility functions
+
+
 def check_url(pfn, hostname, path):
     assert hostname in pfn
     assert path in pfn
@@ -82,6 +86,8 @@ def poll_fts_transfer_status(request_id, timeout=30):
     return transfer_status
 
 # TPC tests
+
+
 @pytest.mark.integration_test_only
 def test_tpc(rse1, rse2, root_account, test_scope, did_factory, rse_client, rule_client, artifact):
     base_file_name = generate_uuid()
