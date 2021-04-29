@@ -35,6 +35,7 @@ from rucio.tests.common import rse_name_generator
 from rucio.db.sqla.constants import DIDType
 from rucio.common.utils import execute
 from rucio.client.rseclient import RSEClient
+from rucio.common.exception import RSENotFound
 
 
 class TemporaryRSEFactory:
@@ -162,11 +163,11 @@ class TemporaryRSEFactory:
         :param rse: rse_id of containerzed rse to be used for lookup
         :return: rse_id if containerized rse was found else None
         """
-        rse = self._rse_client.get_rse(rse_name)
-        rse_id = rse['id']
-        if rse is not None:
+        try:
+            rse = self._rse_client.get_rse(rse_name)
+            rse_id = rse['id']
             return rse_name, rse_id
-        else:
+        except RSENotFound:
             return None, None
 
 
