@@ -132,7 +132,7 @@ def containerized_rses(rucio_client):
         xrd_containerized_rses = [(rse_obj['rse'], rse_obj['id']) for rse_obj in xrd_rses if "xrd" in rse_obj['rse'].lower()]
         xrd_containerized_rses.sort()
         rses.extend(xrd_containerized_rses)
-    except rucio.commons.exception.InvalidRSEExpression as ex:
+    except Exception:
         traceback.print_exc()
     return rses
 
