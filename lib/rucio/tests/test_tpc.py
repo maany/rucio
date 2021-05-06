@@ -27,9 +27,9 @@ def did_factory(vo, test_scope):
 def scope(vo, rse_factory, test_scope, mock_scope):
     xrd1, xrd1_id = rse_factory.fetch_containerized_rse('XRD1')
     if xrd1 is not None:
-        return str(test_scope)
+        return test_scope
     else:
-        return str(mock_scope)
+        return mock_scope
 
 
 @pytest.fixture
