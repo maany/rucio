@@ -106,7 +106,7 @@ def poll_fts_transfer_status(request_id, timeout=30):
 # TPC tests
 
 
-@pytest.mark.skipif(rse1 is None or rse2 is None, reason="TPC tests need at least 2 containerized xrd rse's for execution")
+@pytest.mark.dirty(reason="Creates artifact /tmp/test_tpc.artifact in dev_rucio_1 container")
 def test_tpc(rse1, rse2, root_account, test_scope, did_factory, rse_client, rule_client, artifact):
     if rse1 is None or rse2 is None:
         pytest.skip("TPC tests need at least 2 containerized xrd rse's for execution. Found {rse1} {rse2}")

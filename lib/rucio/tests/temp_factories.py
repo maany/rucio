@@ -38,9 +38,9 @@ class TemporaryRSEFactory:
     """
     Factory which keeps track of created RSEs and cleans up everything related to these RSEs at the end
     """
-
     def __init__(self, vo, **kwargs):
         self.vo = vo
+        
         self.created_rses = []
 
     def __enter__(self):
