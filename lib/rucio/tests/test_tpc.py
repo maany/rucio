@@ -13,16 +13,6 @@ from rucio.client.ruleclient import RuleClient
 from rucio.common.utils import run_cmd_process
 
 # Fixtures
-
-
-@pytest.fixture
-def did_factory(vo, test_scope):
-    from rucio.tests.temp_factories import TemporaryDidFactory
-
-    with TemporaryDidFactory(vo=vo, default_scope=test_scope) as factory:
-        yield factory
-
-
 @pytest.fixture
 def scope(vo, rse_factory, test_scope, mock_scope):
     xrd1, xrd1_id = rse_factory.fetch_containerized_rse('XRD1')
@@ -30,6 +20,14 @@ def scope(vo, rse_factory, test_scope, mock_scope):
         return test_scope
     else:
         return mock_scope
+
+
+@pytest.fixture
+def did_factory(vo, scope):
+    from rucio.tests.temp_factories import TemporaryDidFactory
+
+    with TemporaryDidFactory(vo=vo, default_scope=scope) as factory:
+        yield factory
 
 
 @pytest.fixture
