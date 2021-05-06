@@ -100,6 +100,13 @@ def mock_scope(vo):
 
 
 @pytest.fixture(scope='module')
+def test_scope(vo):
+    from rucio.common.types import InternalScope
+
+    return InternalScope('test', vo=vo)
+
+
+@pytest.fixture(scope='module')
 def root_account(vo):
     from rucio.common.types import InternalAccount
 
