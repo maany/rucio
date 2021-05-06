@@ -33,6 +33,7 @@
 # - Patrick Austin <patrick.austin@stfc.ac.uk>, 2020
 # - Benedikt Ziemons <benedikt.ziemons@cern.ch>, 2020-2021
 # - Anil Panta <anil.panta@desy.de>, 2021
+# - Mayank Sharma <mayank.sharma@cern.ch>, 2021
 
 from __future__ import absolute_import, print_function
 
