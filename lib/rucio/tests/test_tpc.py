@@ -24,6 +24,15 @@ def did_factory(vo, test_scope):
 
 
 @pytest.fixture
+def scope(vo, rse_factory, test_scope, mock_scope):
+    xrd1, xrd1_id = rse_factory.fetch_containerized_rse('XRD1')
+    if xrd1 is not None:
+        return str(test_scope)
+    else:
+        return str(mock_scope)
+
+
+@pytest.fixture
 def rse_client():
     return RSEClient()
 
@@ -88,13 +97,12 @@ def poll_fts_transfer_status(request_id, timeout=30):
 # TPC tests
 
 
-@pytest.mark.integration_test_only
-def test_tpc(rse1, rse2, root_account, test_scope, did_factory, rse_client, rule_client, artifact):
+def test_tpc(rse1, rse2, root_account, scope, did_factory, rse_client, rule_client, artifact):
     base_file_name = generate_uuid()
     test_file = did_factory.upload_test_file(rse1['rse_name'], name=base_file_name + '.000', return_full_item=True)
     test_file_did_str = '%s:%s' % (test_file['did_scope'], test_file['did_name'])
     test_file_did = {
-        'scope': test_scope,
+        'scope': scope,
         'name': test_file['did_name']
     }
     test_file_name_hash = hashlib.md5(test_file_did_str.encode('utf-8')).hexdigest()
