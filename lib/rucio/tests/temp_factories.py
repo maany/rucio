@@ -157,19 +157,6 @@ class TemporaryRSEFactory:
         }
         return self._make_rse(scheme='srm', protocol_impl='rucio.rse.protocols.srm.Default', parameters=parameters, add_rse_kwargs=kwargs)
 
-    def fetch_containerized_rse(self, rse_name):
-        """
-        Detects if containerized rses for xrootd are available in the testing environment.
-        :param rse: rse_id of containerzed rse to be used for lookup
-        :return: rse_id if containerized rse was found else None
-        """
-        try:
-            rse = self._rse_client.get_rse(rse_name)
-            rse_id = rse['id']
-            return rse_name, rse_id
-        except RSENotFound:
-            return None, None
-
 
 class TemporaryDidFactory:
     """
