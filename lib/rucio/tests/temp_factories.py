@@ -38,9 +38,10 @@ class TemporaryRSEFactory:
     """
     Factory which keeps track of created RSEs and cleans up everything related to these RSEs at the end
     """
+
     def __init__(self, vo, **kwargs):
         self.vo = vo
-        
+
         self.created_rses = []
 
     def __enter__(self):
@@ -158,6 +159,7 @@ class TemporaryDidFactory:
     Factory which keeps track of created dids and cleans up everything related to these dids at the end.
     All files related to the same test will have the same uuid in the name for easier debugging.
     """
+
     def __init__(self, default_scope, vo):
         self.default_scope = default_scope
         self.vo = vo

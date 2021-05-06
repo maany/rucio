@@ -83,6 +83,7 @@ def test_upload_single(rse, scope, upload_client, download_client):
         os.remove(local_file)
         shutil.rmtree(scope)
 
+
 @pytest.mark.noparallel(reason="Fails when run in parallel")
 def test_upload_multi(rse, scope, upload_client, download_client):
     local_file1 = file_generator()
@@ -146,6 +147,7 @@ def test_upload_file_already_exists_single(rse, scope, upload_client):
         assert len(traces) == 1 and traces[0]['stateReason'] == 'File already exists'
     finally:
         os.remove(local_file)
+
 
 @pytest.mark.noparallel(reason="Fails when run in parallel")
 def test_upload_file_already_exists_multi(rse, scope, upload_client):
