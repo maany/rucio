@@ -41,7 +41,7 @@ def download_client():
 
 
 @pytest.fixture
-def rse(containerized_rses):
+def rse(containerized_rses, rse_factory):
     if len(containerized_rses) > 0:
         rse, _ = containerized_rses[0]
     else:
