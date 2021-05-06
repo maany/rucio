@@ -66,7 +66,7 @@ if sys.version_info >= (3, 6):
             tests_with_artifacts = tests_with_artifacts[0].split(',')
             test_function_name = metafunc.function.__name__
             if "artifact" in metafunc.fixturenames:
-                if test_function_name in tests_with_artifacts:
+                if test_function_name in tests_with_artifacts and os.environ.get('GITHUB_ACTIONS', '') == 'true':
                     metafunc.parametrize(
                         "artifact",
                         ['/tmp/{function}.artifact'.format(function=test_function_name)]
