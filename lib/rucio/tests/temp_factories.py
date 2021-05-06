@@ -34,7 +34,6 @@ from rucio.tests.common import file_generator
 from rucio.tests.common import rse_name_generator
 from rucio.db.sqla.constants import DIDType
 from rucio.client.rseclient import RSEClient
-from rucio.common.exception import RSENotFound
 
 
 class TemporaryRSEFactory:

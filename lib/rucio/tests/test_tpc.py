@@ -108,6 +108,8 @@ def poll_fts_transfer_status(request_id, timeout=30):
 
 @pytest.mark.skipif(rse1 is None or rse2 is None, reason="TPC tests need at least 2 containerized xrd rse's for execution")
 def test_tpc(rse1, rse2, root_account, test_scope, did_factory, rse_client, rule_client, artifact):
+    if rse1 is None or rse2 is None:
+        pytest.skip("TPC tests need at least 2 containerized xrd rse's for execution. Found {rse1} {rse2}")
     base_file_name = generate_uuid()
     test_file = did_factory.upload_test_file(rse1['rse_name'], name=base_file_name + '.000', return_full_item=True)
     test_file_did_str = '%s:%s' % (test_file['did_scope'], test_file['did_name'])
@@ -143,7 +145,7 @@ def test_tpc(rse1, rse2, root_account, test_scope, did_factory, rse_client, rule
     submitter.run(once=True)
 
     # Get FTS transfer job info
-    fts_transfer_id, fts_transfer_status = list_fts_transfer(timeout=30)
+    fts_transfer_id, fts_transfer_status = list_fts_transfer(timeout=40)
 
     # Check FTS transfer job
     assert fts_transfer_id is not None and fts_transfer_status is not None
