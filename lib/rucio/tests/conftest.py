@@ -125,11 +125,16 @@ def containerized_rses(rucio_client):
     Detects if containerized rses for xrootd are available in the testing environment.
     :return: A list of (rse_name, rse_id) tuples.
     """
-    xrd_rses = [x['rse'] for x in rucio_client.list_rses(rse_expression='test_container_xrd=True')]
-    xrd_rses = [rucio_client.get_rse(rse) for rse in xrd_rses]
-    available_xrd_containerized_rses = [(rse_obj['rse'], rse_obj['id']) for rse_obj in xrd_rses if "xrd" in rse_obj['rse'].lower()]
-    available_xrd_containerized_rses.sort()
-    return available_xrd_containerized_rses
+    rses = []
+    try:
+        xrd_rses = [x['rse'] for x in rucio_client.list_rses(rse_expression='test_container_xrd=True')]
+        xrd_rses = [rucio_client.get_rse(rse) for rse in xrd_rses]
+        xrd_containerized_rses = [(rse_obj['rse'], rse_obj['id']) for rse_obj in xrd_rses if "xrd" in rse_obj['rse'].lower()]
+        xrd_containerized_rses.sort()
+        rses.extend(xrd_containerized_rses)
+    except rucio.commons.exception.InvalidRSEExpression as ex:
+        traceback.print_exc()
+    return rses
 
 
 @pytest.fixture
