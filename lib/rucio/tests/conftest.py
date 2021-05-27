@@ -16,14 +16,14 @@
 # Authors:
 # - Benedikt Ziemons <benedikt.ziemons@cern.ch>, 2020
 # - Radu Carpa <radu.carpa@cern.ch>, 2021
-# - Mayank Sharma <mayank.sharma@cern.ch> 2021
+# - Mayank Sharma <mayank.sharma@cern.ch>, 2021
 
 from __future__ import print_function
 
 import traceback
-
 import pytest
 
+from rucio.common.exception import InvalidRSEExpression
 
 # local imports in the fixtures to make this file loadable in e.g. client tests
 
@@ -132,7 +132,9 @@ def containerized_rses(rucio_client):
         xrd_containerized_rses = [(rse_obj['rse'], rse_obj['id']) for rse_obj in xrd_rses if "xrd" in rse_obj['rse'].lower()]
         xrd_containerized_rses.sort()
         rses.extend(xrd_containerized_rses)
-    except Exception:
+    except InvalidRSEExpression as invalid_rse_expression:
+        print("{ex}. Note that containerized RSEs will not be available in non-containerized test environments"
+              .format(ex=invalid_rse_expression))
         traceback.print_exc()
     return rses
 
