@@ -20,13 +20,11 @@
 
 import os
 import shutil
-import tempfile
-from logging import setLogRecordFactory
+import tempfiles
 from pathlib import Path
 from random import choice
 from string import ascii_uppercase
 
-import py
 from rucio.client.client import Client
 from rucio.client.uploadclient import UploadClient
 from rucio.common.types import InternalScope
@@ -296,7 +294,7 @@ class TemporaryDidFactory:
 class TemporaryFileFactory:
     """
     Factory which keeps track of creation and cleanup of created local test files and directories.
-    If initialized with tmp_path_factory fixture, the basedir is managed by pytest. 
+    If initialized with tmp_path_factory fixture, the basedir is managed by pytest.
     Otherwise, the basedir is handled by this factory itself.
     """
 

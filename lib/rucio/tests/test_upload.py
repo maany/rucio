@@ -20,7 +20,6 @@ import pytest
 import os
 from rucio.client.downloadclient import DownloadClient
 from rucio.client.uploadclient import UploadClient
-from rucio.tests.common import file_generator
 from rucio.common.exception import NotAllFilesUploaded, NoFilesUploaded, InputValidationError
 from rucio.common.utils import generate_uuid
 from rucio.common.utils import adler32
