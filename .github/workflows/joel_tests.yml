@@ -1,4 +1,4 @@
-name: Run all the autotests
+name: Joel Tests
 
 on:
   - pull_request
@@ -12,7 +12,9 @@ jobs:
       - uses: actions/checkout@v2
         with:
           fetch-depth: 0
-      - run: |
+      - name: Check headers
+        run: |
+          git pull origin master
           echo "Current git rev $(git rev-parse HEAD)"
           echo "Git rev $(git merge-base HEAD remotes/origin/master)"
           echo "If a file header needs to be changed run "tools/add_header -i FILE" from the rucio project directory."
