@@ -1,0 +1,39 @@
+name: Run all the autotests
+
+on:
+  - pull_request
+  - push
+  - workflow_dispatch
+
+jobs:
+  header-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - run: |
+          echo "Current git rev $(git rev-parse HEAD)"
+          echo "Git rev $(git merge-base HEAD remotes/origin/master)"
+          echo "If a file header needs to be changed run "tools/add_header -i FILE" from the rucio project directory."
+          for file in $(git diff --name-status HEAD $(git merge-base HEAD remotes/origin/master) | grep -v '^A' | cut -f 2 | grep -E '\.py$|^bin/'); do
+            echo "Processing $file"
+          done
+  setup:
+    if: ${{ success() || cancelled() }}
+    needs: header-lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Update pip
+        run: python3 -m pip install -U pip setuptools
+  tests:
+    needs: setup
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build images
+        id: images
+        shell: bash
+        run: |
+          echo "Running Tests"
+  
