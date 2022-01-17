@@ -24,7 +24,7 @@ jobs:
           done
           exit 1
   setup:
-    needs: header-lint
+    if: ${{ success() || cancelled() }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
