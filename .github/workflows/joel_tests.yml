@@ -22,6 +22,7 @@ jobs:
           for file in $(git diff --name-status HEAD $(git merge-base HEAD remotes/origin/master) | grep -v '^A' | cut -f 2 | grep -E '\.py$|^bin/'); do
             echo "Processing $file"
           done
+          exit 1
   setup:
     if: ${{ success() || cancelled() }}
     needs: header-lint
