@@ -24,7 +24,6 @@ jobs:
           done
           exit 1
   setup:
-    if: ${{ success() || cancelled() }}
     needs: header-lint
     runs-on: ubuntu-latest
     steps:
