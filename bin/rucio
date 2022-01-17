@@ -72,6 +72,7 @@ import time
 import traceback
 import unittest
 import uuid
+from datetime import datetime
 from functools import wraps
 
 from six.moves.configparser import NoOptionError, NoSectionError
@@ -236,10 +237,6 @@ def exception_handler(function):
     return new_funct
 
 
-def option_deprecation_message(old_option, new_option, support_end_version='1.27'):
-    logger.warning('The use of {} is deprecated in favour of {} and will be removed in {}'.format(old_option, new_option, support_end_version))
-
-
 def get_client(args):
     """
     Returns a new client object.
@@ -389,22 +386,6 @@ def list_file_replicas(args):
     if args.missing:
         args.all_states = True
     client = get_client(args)
-
-    if args.selected_rse and args.rses:
-        # If the new cli arg and the old one are defined we don't know which one to take
-        logger.error("Cannot use --rse and --rses together, please use --rses")
-        return FAILURE
-    elif args.rse_expression and args.rses:
-        # If the new cli arg and the old one are defined we don't know which one to take
-        logger.error("Cannot use --expression and --rses together, please use --rses")
-        return FAILURE
-    elif args.selected_rse:
-        option_deprecation_message("--rse", "--rses")
-        client.get_rse(args.selected_rse)    # Raise an exception if RSE does not exist
-        args.rses = args.selected_rse
-    elif args.rse_expression:
-        option_deprecation_message("--expression", "--rses")
-        args.rses = args.rse_expression
 
     protocols = None
     if args.protocols:
@@ -1005,6 +986,15 @@ def upload(args):
 
     Upload files into Rucio
     """
+    if args.lifetime and args.expiration_date:
+        logger.error("--lifetime and --expiration-date cannot be specified at the same time.")
+        return FAILURE
+    elif args.expiration_date:
+        expiration_date = datetime.strptime(args.expiration_date, "%Y-%m-%d-%H:%M:%S")
+        if expiration_date < datetime.utcnow():
+            logger.error("The specified expiration date should be in the future!")
+            return FAILURE
+        args.lifetime = (expiration_date - datetime.utcnow()).total_seconds()
 
     dsscope = None
     dsname = None
@@ -1091,10 +1081,6 @@ def download(args):
     if args.ignore_checksum and args.check_local_with_filesize_only:
         logger.error('Arguments ignore-checksum and check-local-with-filesize-only cannot be used together.')
         return FAILURE
-
-    if args.rse:  # TODO:remove-deprecated
-        args.rses = args.rse
-        option_deprecation_message("--rse", "--rses")
 
     trace_pattern = {}
 
@@ -1373,10 +1359,6 @@ def delete_rule(args):
     """
     client = get_client(args)
 
-    if args.rse_expression:  # TODO:remove-deprecated
-        args.rses = args.rse_expression
-        option_deprecation_message("--rse_expression", "--rses")
-
     try:
         # Test if the rule_id is a real rule_id
         uuid.UUID(args.rule_id)
@@ -1638,16 +1620,8 @@ def list_rses(args):
 
     """
     client = get_client(args)
-    rse_expression = None
 
-    if args.rse_expression:  # TODO:remove-deprecated
-        args.rses = args.rse_expression
-        option_deprecation_message("--expression", "--rses")
-
-    if args.rses:
-        rse_expression = args.rses
-
-    rses = client.list_rses(rse_expression)
+    rses = client.list_rses(args.rses)
     for rse in rses:
         print('%(rse)s' % rse)
     return SUCCESS
@@ -1961,15 +1935,12 @@ To list the missing replica of a dataset of a given RSE-expression::
     list_file_replicas_parser.add_argument('--pfns', default=False, action='store_true', help='Show only the PFNs.', required=False)
     list_file_replicas_parser.add_argument('--domain', default=None, action='store', help='Force the networking domain. Available options: wan, lan, all.', required=False)
     list_file_replicas_parser.add_argument('--link', dest='link', default=None, action='store', help='Symlink PFNs with directory substitution.', required=False)
-    list_file_replicas_parser.add_argument('--rse', dest='selected_rse', default=False, action='store', help='Show only results for this RSE. Deprecated, use --rses instead', required=False).completer = rse_completer  # TODO:remove-deprecated
     list_file_replicas_parser.add_argument('--missing', dest='missing', default=False, action='store_true', help='To list missing replicas at a RSE-Expression. Must be used with --rses option', required=False)
     list_file_replicas_parser.add_argument('--metalink', dest='metalink', default=False, action='store_true', help='Output available replicas as metalink.', required=False)
     list_file_replicas_parser.add_argument('--no-resolve-archives', dest='no_resolve_archives', default=False, action='store_true', help='Do not resolve archives which may contain the files.', required=False)
     list_file_replicas_parser.add_argument('--sort', dest='sort', default=None, action='store', help='Replica sort algorithm. Available options: geoip (default), random', required=False)
-    list_file_replicas_parser.add_argument('--expression', dest='rse_expression', default=None, action='store', help='The RSE filter expression. A comprehensive help about RSE expressions\
-            can be found in ' + Color.BOLD + 'http://rucio.cern.ch/client_tutorial.html#adding-rules-for-replication' + Color.END)  # TODO:remove-deprecated
     list_file_replicas_parser.add_argument('--rses', dest='rses', default=None, action='store', help='The RSE filter expression. A comprehensive help about RSE expressions\
-            can be found in ' + Color.BOLD + 'http://rucio.cern.ch/client_tutorial.html#adding-rules-for-replication' + Color.END)
+            can be found in ' + Color.BOLD + 'http://rucio.cern.ch/documentation/rse_expressions/' + Color.END)
 
     # The list-dataset-replicas command
     list_dataset_replicas_parser = subparsers.add_parser('list-dataset-replicas', help='List the dataset replicas.',
@@ -2290,6 +2261,7 @@ You can filter by key/value, e.g.::
     upload_parser.set_defaults(function=upload)
     upload_parser.add_argument('--rse', dest='rse', action='store', help='Rucio Storage Element (RSE) name.', required=True).completer = rse_completer
     upload_parser.add_argument('--lifetime', type=int, action='store', help='Lifetime of the rule in seconds.')
+    upload_parser.add_argument('--expiration-date', action='store', help='The date when the rule expires in UTC, format: <year>-<month>-<day>-<hour>:<minute>:<second>. E.g. 2022-10-20-20:00:00')
     upload_parser.add_argument('--scope', dest='scope', action='store', help='Scope name.')
     upload_parser.add_argument('--impl', dest='impl', action='store', help='Transfer protocol implementation to use (e.g: xrootd, gfal.NoRename, webdav, ssh.Rsync, rclone).')
     # The --no-register option is hidden. This is pilot ONLY. Users should not use this. Will lead to unregistered data on storage!
@@ -2312,7 +2284,6 @@ You can filter by key/value, e.g.::
         selected_parser.add_argument('--dir', dest='dir', default='.', action='store', help='The directory to store the downloaded file.')
         selected_parser.add_argument(dest='dids', nargs='*', action='store', help='List of space separated data identifiers.')
         selected_parser.add_argument('--allow-tape', action='store_true', default=False, help="Also consider tape endpoints as source of the download.")
-        selected_parser.add_argument('--rse', action='store', help='RSE Expression to specify allowed sources')  # TODO:remove-deprecated
         selected_parser.add_argument('--rses', action='store', help='RSE Expression to specify allowed sources')
         selected_parser.add_argument('--impl', dest='impl', action='store', help='Transfer protocol implementation to use (e.g: xrootd, gfal.NoRename, webdav, ssh.Rsync, rclone).')
         selected_parser.add_argument('--protocol', action='store', help='Force the protocol to use.')
@@ -2403,7 +2374,6 @@ You can filter by key/value, e.g.::
     delete_rule_parser.add_argument(dest='rule_id', action='store', help='Rule id or DID. If DID, the RSE expression is mandatory.')
     delete_rule_parser.add_argument('--purge-replicas', dest='purge_replicas', action='store_true', help='Purge rule replicas')
     delete_rule_parser.add_argument('--all', dest='delete_all', action='store_true', default=False, help='Delete all the rules, even the ones that are not owned by the account')
-    delete_rule_parser.add_argument('--rse_expression', '--rse-expression', new_option_string='--rse-expression', dest='rse_expression', action=StoreAndDeprecateWarningAction, help='The RSE expression. Must be specified if a DID is provided.')
     delete_rule_parser.add_argument('--rses', dest='rses', action='store', help='The RSE expression. Must be specified if a DID is provided.')
     delete_rule_parser.add_argument('--account', dest='rule_account', action='store', help='The account of the rule that must be deleted')
 
@@ -2479,16 +2449,14 @@ You can filter by account::
     # The list-rses command
     list_rses_parser = subparsers.add_parser('list-rses', help='Show the list of all the registered Rucio Storage Elements (RSEs).')
     list_rses_parser.set_defaults(function=list_rses)
-    list_rses_parser.add_argument('--expression', dest='rse_expression', action='store', help='The RSE filter expression. A comprehensive help about RSE expressions \
-can be found in ' + Color.BOLD + 'http://rucio.cern.ch/client_tutorial.html#adding-rules-for-replication' + Color.END)  # TODO:remove-deprecated
     list_rses_parser.add_argument('--rses', dest='rses', action='store', help='The RSE filter expression. A comprehensive help about RSE expressions \
-can be found in ' + Color.BOLD + 'http://rucio.cern.ch/client_tutorial.html#adding-rules-for-replication' + Color.END)
+can be found in ' + Color.BOLD + 'http://rucio.cern.ch/documentation/rse_expressions/' + Color.END)
 
-    # The list-suspicoius-replicas command
+    # The list-suspicious-replicas command
     list_suspicious_replicas_parser = subparsers.add_parser('list-suspicious-replicas', help='Show the list of all replicas marked "suspicious".')
     list_suspicious_replicas_parser.set_defaults(function=list_suspicious_replicas)
     list_suspicious_replicas_parser.add_argument('--expression', dest='rse_expression', action='store', help='The RSE filter expression. A comprehensive help about RSE expressions \
-can be found in ' + Color.BOLD + 'http://rucio.cern.ch/client_tutorial.html#adding-rules-for-replication' + Color.END)
+can be found in ' + Color.BOLD + 'http://rucio.cern.ch/documentation/rse_expressions/' + Color.END)
     list_suspicious_replicas_parser.add_argument('--younger_than', '--younger-than', new_option_string='--younger-than', dest='younger_than', action=StoreAndDeprecateWarningAction, help='List files that have been marked suspicious since the date "younger_than", e.g. 2021-11-29T00:00:00.')  # NOQA: E501
     list_suspicious_replicas_parser.add_argument('--nattempts', dest='nattempts', action='store', help='Minimum number of failed attempts to access a suspicious file.')
 

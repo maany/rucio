@@ -134,7 +134,20 @@ def __get_source(request_id, src_rse_id, scope, name, session=None):
     'rucio.core.config.REGION',
     'rucio.daemons.reaper.reaper.REGION',
 ]}], indirect=True)
-def test_multihop_intermediate_replica_lifecycle(vo, did_factory, root_account, core_config_mock, caches_mock, metrics_mock):
+@pytest.mark.parametrize("file_config_mock", [
+    # Run test twice: with, and without, temp tables
+    {
+        "overrides": [
+            ('core', 'use_temp_tables', 'True'),
+        ]
+    },
+    {
+        "overrides": [
+            ('core', 'use_temp_tables', 'False'),
+        ]
+    }
+], indirect=True)
+def test_multihop_intermediate_replica_lifecycle(vo, did_factory, root_account, core_config_mock, caches_mock, metrics_mock, file_config_mock):
     """
     Ensure that intermediate replicas created by the submitter are protected from deletion even if their tombstone is
     set to epoch.
@@ -253,7 +266,7 @@ def test_fts_non_recoverable_failures_handled_on_multihop(vo, did_factory, root_
     submitter(once=True, rses=[{'id': rse_id} for rse_id in all_rses], group_bulk=2, partition_wait_time=None, transfertype='single', filter_transfertool=None)
 
     request = __wait_for_request_state(dst_rse_id=dst_rse_id, state=RequestState.FAILED, **did)
-    assert 'Cancelled hop in multi-hop' in request['err_msg']
+    assert 'Unused hop in multi-hop' in request['err_msg']
     assert request['state'] == RequestState.FAILED
     request = request_core.get_request_by_did(rse_id=jump_rse_id, **did)
     assert request['state'] == RequestState.FAILED
@@ -384,6 +397,12 @@ def test_multisource(vo, did_factory, root_account, replica_client, core_config_
     # Only one request was handled; doesn't matter that it's multisource
     assert metrics_mock.get_sample_value('rucio_daemons_conveyor_finisher_handle_requests_total') >= 1
     assert metrics_mock.get_sample_value('rucio_daemons_conveyor_poller_update_request_state_total', labels={'updated': 'True'}) >= 1
+    assert metrics_mock.get_sample_value(
+        'rucio_core_request_get_next_total',
+        labels={
+            'request_type': 'TRANSFER.STAGEIN.STAGEOUT',
+            'state': 'DONE.FAILED.LOST.SUBMITTING.SUBMISSION_FAILED.NO_SOURCES.ONLY_TAPE_SOURCES.MISMATCH_SCHEME'}
+    )
 
 
 @skip_rse_tests_with_accounts
@@ -481,7 +500,7 @@ def test_multihop_receiver_on_failure(vo, did_factory, replica_client, root_acco
         # TODO: set the run_poller argument to False if we ever manage to make the receiver correctly handle multi-hop failures.
         request = __wait_for_request_state(dst_rse_id=dst_rse_id, state=RequestState.FAILED, run_poller=True, **did)
         assert request['state'] == RequestState.FAILED
-        assert 'Cancelled hop in multi-hop' in request['err_msg']
+        assert 'Unused hop in multi-hop' in request['err_msg']
 
         # First hop will be handled by receiver; second hop by poller
         assert metrics_mock.get_sample_value('rucio_daemons_conveyor_receiver_update_request_state_total', labels={'updated': 'True'}) >= 1

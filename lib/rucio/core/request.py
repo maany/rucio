@@ -309,8 +309,10 @@ def get_next(request_type, state, limit=100, older_than=None, rse_id=None, activ
     :param session:           Database session to use.
     :returns:                 Request as a dictionary.
     """
-
-    record_counter('core.request.get_next.{request_type}.{state}', labels={'request_type': request_type, 'state': state})
+    request_type_metric_label = '.'.join(a.name for a in request_type) if isinstance(request_type, list) else request_type.name
+    state_metric_label = '.'.join(s.name for s in state) if isinstance(state, list) else state.name
+    record_counter('core.request.get_next.{request_type}.{state}', labels={'request_type': request_type_metric_label,
+                                                                           'state': state_metric_label})
 
     # lists of one element are not allowed by SQLA, so just duplicate the item
     if type(request_type) is not list:
@@ -507,26 +509,6 @@ def set_request_state(request_id, new_state, transfer_id=None, transferred_at=No
 
     if not rowcount:
         raise UnsupportedOperation("Request %s state cannot be updated." % request_id)
-
-
-@transactional_session
-def set_requests_state(request_ids, new_state, session=None, logger=logging.log):
-    """
-    Bulk update the state of requests.
-
-    :param request_ids:  List of (Request-ID as a 32 character hex string).
-    :param new_state:    New state as string.
-    :param session:      Database session to use.
-    :param logger:       Optional decorated logger that can be passed from the calling daemons or servers.
-    """
-
-    record_counter('core.request.set_requests_state')
-
-    try:
-        for request_id in request_ids:
-            set_request_state(request_id, new_state, session=session, logger=logger)
-    except IntegrityError as error:
-        raise RucioException(error.args)
 
 
 @transactional_session

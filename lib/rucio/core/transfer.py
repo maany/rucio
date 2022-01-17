@@ -57,7 +57,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.sql.expression import false
 
 from rucio.common import constants
-from rucio.common.config import config_get
+from rucio.common.config import config_get, config_get_bool
 from rucio.common.constants import SUPPORTED_PROTOCOLS, FTS_STATE
 from rucio.common.exception import (InvalidRSEExpression, NoDistance,
                                     RequestNotFound, RSEProtocolNotSupported,
@@ -69,12 +69,13 @@ from rucio.core import did, message as message_core, request as request_core
 from rucio.core.config import get as core_config_get
 from rucio.core.monitor import record_counter, record_timer
 from rucio.core.replica import add_replicas, tombstone_from_delay, update_replica_state
-from rucio.core.request import queue_requests, set_requests_state
+from rucio.core.request import queue_requests, set_request_state
 from rucio.core.rse import get_rse_name, get_rse_vo, list_rses
 from rucio.core.rse_expression_parser import parse_expression
 from rucio.db.sqla import models, filter_thread_work
 from rucio.db.sqla.constants import DIDType, RequestState, RSEType, RequestType, ReplicaState
 from rucio.db.sqla.session import read_session, transactional_session
+from rucio.db.sqla.util import create_temp_table
 from rucio.rse import rsemanager as rsemgr
 from rucio.transfertool.transfertool import Transfertool, TransferToolBuilder
 from rucio.transfertool.fts3 import FTS3Transfertool
@@ -100,7 +101,7 @@ REGION_SHORT = make_region().configure('dogpile.cache.memcached',
                                        arguments={'url': config_get('cache', 'url', False, '127.0.0.1:11211'), 'distributed_lock': True})
 WEBDAV_TRANSFER_MODE = config_get('conveyor', 'webdav_transfer_mode', False, None)
 
-DEFAULT_MULTIHOP_TOMBSTONE_DELAY = datetime.timedelta(hours=2)
+DEFAULT_MULTIHOP_TOMBSTONE_DELAY = int(datetime.timedelta(hours=2).total_seconds())
 
 
 class RseData:
@@ -480,64 +481,57 @@ def transfer_path_str(transfer_path: "List[DirectTransferDefinition]") -> str:
 
 
 @transactional_session
-def mark_submitting_and_prepare_sources_for_transfers(
-        transfers: "Iterable[DirectTransferDefinition]",
+def mark_submitting_and_prepare_sources_for_transfer(
+        transfer: "DirectTransferDefinition",
         external_host: str,
         logger: "Callable",
         session: "Optional[Session]" = None,
 ):
     """
     Prepare the sources for transfers.
-    :param transfers:  Dictionary containing request transfer info.
+    :param transfer:   A transfer object
     :param session:    Database session to use.
     """
 
-    logger(logging.DEBUG, 'Start to prepare transfer')
-    try:
-        for transfer in transfers:
-            log_str = 'PREPARING REQUEST %s DID %s:%s TO SUBMITTING STATE PREVIOUS %s FROM %s TO %s USING %s ' % (transfer.rws.request_id,
-                                                                                                                  transfer.rws.scope,
-                                                                                                                  transfer.rws.name,
-                                                                                                                  transfer.rws.previous_attempt_id,
-                                                                                                                  transfer.legacy_sources,
-                                                                                                                  transfer.dest_url,
-                                                                                                                  external_host)
-            logger(logging.INFO, "%s", log_str)
+    log_str = 'PREPARING REQUEST %s DID %s:%s TO SUBMITTING STATE PREVIOUS %s FROM %s TO %s USING %s ' % (transfer.rws.request_id,
+                                                                                                          transfer.rws.scope,
+                                                                                                          transfer.rws.name,
+                                                                                                          transfer.rws.previous_attempt_id,
+                                                                                                          transfer.legacy_sources,
+                                                                                                          transfer.dest_url,
+                                                                                                          external_host)
+    logger(logging.INFO, "%s", log_str)
 
-            rowcount = session.query(models.Request)\
-                              .filter_by(id=transfer.rws.request_id)\
-                              .filter(models.Request.state == RequestState.QUEUED)\
-                              .update({'state': RequestState.SUBMITTING,
-                                       'external_id': None,
-                                       'external_host': external_host,
-                                       'dest_url': transfer.dest_url,
-                                       'submitted_at': datetime.datetime.utcnow()},
-                                      synchronize_session=False)
-            if rowcount == 0:
-                raise RequestNotFound("Failed to prepare transfer: request %s does not exist or is not in queued state" % transfer.rws)
+    rowcount = session.query(models.Request)\
+                      .filter_by(id=transfer.rws.request_id)\
+                      .filter(models.Request.state == RequestState.QUEUED)\
+                      .update({'state': RequestState.SUBMITTING,
+                               'external_id': None,
+                               'external_host': external_host,
+                               'dest_url': transfer.dest_url,
+                               'submitted_at': datetime.datetime.utcnow()},
+                              synchronize_session=False)
+    if rowcount == 0:
+        raise RequestNotFound("Failed to prepare transfer: request %s does not exist or is not in queued state" % transfer.rws)
 
-            for src_rse, src_url, src_rse_id, rank in transfer.legacy_sources:
-                # For multi-hops, sources in database are bound to the initial request
-                source_request_id = transfer.rws.attributes.get('initial_request_id', transfer.rws.request_id)
-                src_rowcount = session.query(models.Source)\
-                                      .filter_by(request_id=source_request_id)\
-                                      .filter(models.Source.rse_id == src_rse_id)\
-                                      .update({'is_using': True}, synchronize_session=False)
-                if src_rowcount == 0:
-                    models.Source(request_id=source_request_id,
-                                  scope=transfer.rws.scope,
-                                  name=transfer.rws.name,
-                                  rse_id=src_rse_id,
-                                  dest_rse_id=transfer.dst.rse.id,
-                                  ranking=rank if rank else 0,
-                                  bytes=transfer.rws.byte_count,
-                                  url=src_url,
-                                  is_using=True).\
-                        save(session=session, flush=False)
-
-    except IntegrityError as error:
-        raise RucioException(error.args)
-    logger(logging.DEBUG, 'Finished to prepare transfer')
+    for src_rse, src_url, src_rse_id, rank in transfer.legacy_sources:
+        # For multi-hops, sources in database are bound to the initial request
+        source_request_id = transfer.rws.attributes.get('initial_request_id', transfer.rws.request_id)
+        src_rowcount = session.query(models.Source)\
+                              .filter_by(request_id=source_request_id)\
+                              .filter(models.Source.rse_id == src_rse_id)\
+                              .update({'is_using': True}, synchronize_session=False)
+        if src_rowcount == 0:
+            models.Source(request_id=source_request_id,
+                          scope=transfer.rws.scope,
+                          name=transfer.rws.name,
+                          rse_id=src_rse_id,
+                          dest_rse_id=transfer.dst.rse.id,
+                          ranking=rank if rank else 0,
+                          bytes=transfer.rws.byte_count,
+                          url=src_url,
+                          is_using=True).\
+                save(session=session, flush=False)
 
 
 @transactional_session
@@ -548,11 +542,12 @@ def set_transfers_state(transfers, state, submitted_at, external_host, external_
     :param session:    Database session to use.
     """
 
-    logger(logging.DEBUG, 'Start register transfer state to %s for eid %s' % (state, external_id))
+    logger(logging.INFO, 'Setting state(%s), external_host(%s) and eid(%s) for transfers: %s',
+           state.name, external_host, external_id, ', '.join(t.rws.request_id for t in transfers))
     try:
         for transfer in transfers:
             rws = transfer.rws
-            logger(logging.INFO, 'COPYING REQUEST %s DID %s:%s USING %s with state(%s) with eid(%s)' % (rws.request_id, rws.scope, rws.name, external_host, state, external_id))
+            logger(logging.DEBUG, 'COPYING REQUEST %s DID %s:%s USING %s with state(%s) with eid(%s)' % (rws.request_id, rws.scope, rws.name, external_host, state, external_id))
             rowcount = session.query(models.Request)\
                               .filter_by(id=transfer.rws.request_id)\
                               .filter(models.Request.state == RequestState.SUBMITTING)\
@@ -1231,7 +1226,8 @@ def next_transfers_to_submit(total_workers=0, worker_number=0, partition_hash_va
     paths_by_transfertool_builder, reqs_no_host, reqs_unsupported_transfertool = __assign_paths_to_transfertool_and_create_hops(
         candidate_paths,
         transfertools_by_name=transfertools_by_name,
-        logger=logger
+        logger=logger,
+        session=session,
     )
 
     if reqs_unsupported_transfertool:
@@ -1434,7 +1430,8 @@ def __parse_request_transfertools(
 def __assign_paths_to_transfertool_and_create_hops(
         candidate_paths_by_request_id: "Dict[str: List[DirectTransferDefinition]]",
         transfertools_by_name: "Optional[Dict[str, Type[Transfertool]]]" = None,
-        logger: "Callable" = logging.log
+        logger: "Callable" = logging.log,
+        session: "Optional[Session]" = None,
 ) -> "Tuple[Dict[TransferToolBuilder, List[DirectTransferDefinition]], Set[str], Set[str]]":
     """
     for each request, pick the first path which can be submitted by one of the transfertools.
@@ -1473,7 +1470,7 @@ def __assign_paths_to_transfertool_and_create_hops(
                     if builder:
                         break
             if builder or not transfertools_by_name:
-                if create_missing_replicas_and_requests(transfer_path, default_tombstone_delay, logger=logger):
+                if create_missing_replicas_and_requests(transfer_path, default_tombstone_delay, logger=logger, session=session):
                     best_path = transfer_path
                     builder_to_use = builder
                     break
@@ -1517,10 +1514,14 @@ def create_missing_replicas_and_requests(
         if rws.request_id:
             continue
 
-        if 'multihop_tombstone_delay' in rws.dest_rse.attributes:
-            tombstone = tombstone_from_delay(rws.dest_rse.attributes['multihop_tombstone_delay'])
-        else:
-            tombstone = tombstone_from_delay(default_tombstone_delay)
+        tombstone_delay = rws.dest_rse.attributes.get('multihop_tombstone_delay', default_tombstone_delay)
+        try:
+            tombstone = tombstone_from_delay(tombstone_delay)
+        except ValueError:
+            logger(logging.ERROR, "%s: Cannot parse multihop tombstone delay %s", initial_request_id, tombstone_delay)
+            creation_successful = False
+            break
+
         files = [{'scope': rws.scope,
                   'name': rws.name,
                   'bytes': rws.byte_count,
@@ -1558,7 +1559,7 @@ def create_missing_replicas_and_requests(
             break
         rws.request_id = new_req[0]['id']
         logger(logging.DEBUG, '%s: New request created for the transfer between %s and %s : %s', initial_request_id, transfer_path[0].src, transfer_path[-1].dst, rws.request_id)
-        set_requests_state(request_ids=[rws.request_id, ], new_state=RequestState.QUEUED, session=session)
+        set_request_state(rws.request_id, RequestState.QUEUED, session=session, logger=logger)
         created_requests.append(rws.request_id)
 
     if not creation_successful:
@@ -1566,7 +1567,9 @@ def create_missing_replicas_and_requests(
         logger(logging.WARNING, '%s: Multihop : A request already exists for the transfer between %s and %s. Will cancel all the parent requests',
                initial_request_id, transfer_path[0].src, transfer_path[-1].dst)
         try:
-            set_requests_state(request_ids=created_requests, new_state=RequestState.FAILED, session=session)
+            for request_id in created_requests:
+                set_request_state(request_id=request_id, new_state=RequestState.FAILED,
+                                  err_msg="Cancelled hop in multi-hop", session=session)
         except UnsupportedOperation:
             logger(logging.ERROR, '%s: Multihop : Cannot cancel all the parent requests : %s', initial_request_id, str(created_requests))
 
@@ -1650,6 +1653,18 @@ def __list_transfer_requests_and_source_replicas(
     else:
         sub_requests = sub_requests.with_hint(models.Request, "INDEX(REQUESTS REQUESTS_TYP_STA_UPD_IDX)", 'oracle')
 
+    use_temp_tables = config_get_bool('core', 'use_temp_tables', default=False)
+    if rses and use_temp_tables:
+        temp_table_cls = create_temp_table(
+            "list_transfer_requests_and_source_replicas",
+            models.Column("rse_id", models.GUID()),
+            session=session,
+        )
+
+        session.bulk_insert_mappings(temp_table_cls, [{'rse_id': rse_id} for rse_id in rses])
+
+        sub_requests = sub_requests.join(temp_table_cls, temp_table_cls.rse_id == models.RSE.id)
+
     sub_requests = filter_thread_work(session=session, query=sub_requests, total_threads=total_workers, thread_id=worker_number, hash_variable=partition_hash_var)
 
     if limit:
@@ -1705,8 +1720,8 @@ def __list_transfer_requests_and_source_replicas(
     for (request_id, rule_id, scope, name, md5, adler32, byte_count, activity, attributes, previous_attempt_id, dest_rse_id, account, retry_count,
          priority, transfertool, source_rse_id, source_rse_name, file_path, source_ranking, source_url, distance_ranking) in query:
 
-        # rses (of unknown length) should be a temporary table to check against instead of this special case
-        if rses and dest_rse_id not in rses:
+        # If we didn't pre-filter using temporary tables on database side, perform the filtering here
+        if not use_temp_tables and rses and dest_rse_id not in rses:
             continue
 
         request = requests_by_id.get(request_id)
