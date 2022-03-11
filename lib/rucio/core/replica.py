@@ -15,9 +15,9 @@
 #
 # Authors:
 # - Vincent Garonne <vincent.garonne@cern.ch>, 2013-2018
-# - Cedric Serfon <cedric.serfon@cern.ch>, 2013-2021
+# - Cedric Serfon <cedric.serfon@cern.ch>, 2013-2022
 # - Ralph Vigne <ralph.vigne@cern.ch>, 2013-2014
-# - Martin Barisits <martin.barisits@cern.ch>, 2013-2021
+# - Martin Barisits <martin.barisits@cern.ch>, 2013-2022
 # - Mario Lassnig <mario.lassnig@cern.ch>, 2014-2021
 # - David Cameron <david.cameron@cern.ch>, 2014
 # - Thomas Beermann <thomas.beermann@cern.ch>, 2014-2021
@@ -39,15 +39,14 @@
 # - Radu Carpa <radu.carpa@cern.ch>, 2021-2022
 # - Gabriele Fronzé <sucre.91@hotmail.it>, 2021
 # - David Población Criado <david.poblacion.criado@cern.ch>, 2021
-# - Joel Dierkes <joel.dierkes@cern.ch>, 2021
-# - Christoph Ames <cames@cern.ch>, 2021
-
-from __future__ import print_function
+# - Joel Dierkes <joel.dierkes@cern.ch>, 2021-2022
+# - Christoph Ames <christoph.ames@physik.uni-muenchen.de>, 2021
 
 import heapq
 import logging
+import math
 import random
-from collections import defaultdict
+from collections import defaultdict, namedtuple
 from copy import deepcopy
 from curses.ascii import isprint
 from datetime import datetime, timedelta
@@ -60,18 +59,19 @@ from traceback import format_exc
 import requests
 from dogpile.cache.api import NO_VALUE
 from six import string_types
-from sqlalchemy import func, and_, or_, exists, not_, update, delete
+from sqlalchemy import func, and_, or_, exists, not_, update, delete, insert, Column
 from sqlalchemy.exc import DatabaseError, IntegrityError
 from sqlalchemy.orm import aliased
 from sqlalchemy.orm.exc import FlushError, NoResultFound
 from sqlalchemy.sql import label
-from sqlalchemy.sql.expression import case, select, text, false, true
+from sqlalchemy.sql.expression import case, select, text, false, true, null
 
 import rucio.core.did
 import rucio.core.lock
 from rucio.common import exception
 from rucio.common.cache import make_region_memcached
-from rucio.common.config import config_get
+from rucio.common.config import config_get, config_get_bool
+from rucio.common.schema import get_schema_value
 from rucio.common.types import InternalScope
 from rucio.common.utils import chunks, clean_surls, str_to_date, add_url_query
 from rucio.common.constants import SuspiciousAvailability
@@ -85,9 +85,15 @@ from rucio.db.sqla.constants import (DIDType, ReplicaState, OBSOLETE, DIDAvailab
                                      BadFilesStatus, RuleState, BadPFNStatus)
 from rucio.db.sqla.session import (read_session, stream_session, transactional_session,
                                    DEFAULT_SCHEMA_NAME, BASE)
+from rucio.db.sqla.types import InternalScopeString, String
+from rucio.db.sqla.util import create_temp_table
 from rucio.rse import rsemanager as rsemgr
 
 REGION = make_region_memcached(expiration_time=60)
+
+
+ScopeName = namedtuple('ScopeName', ['scope', 'name'])
+Association = namedtuple('Association', ['scope', 'name', 'child_scope', 'child_name'])
 
 
 @read_session
@@ -145,40 +151,74 @@ def get_bad_replicas_summary(rse_expression=None, from_date=None, to_date=None, 
 
 
 @read_session
-def __exists_replicas(rse_id, scope=None, name=None, path=None, session=None):
+def __exist_replicas(rse_id, replicas, session=None):
     """
     Internal method to check if a replica exists at a given site.
     :param rse_id: The RSE id.
-    :param scope: The scope of the file.
-    :param name: The name of the file.
-    :param path: The path of the replica.
+    :param replicas: A list of tuples [(<scope>, <name>, <path>}) with either :
+                     - scope and name are None and path not None
+                     - scope and name are not None and path is None
     :param session: The database session in use.
+
+    :returns: A list of tuple (<scope>, <name>, <path>, <exists>, <already_declared>, <bytes>)
+              where
+              - <exists> is a boolean that identifies if the replica exists
+              - <already_declared> is a boolean that identifies if the replica is already declared bad
     """
 
-    already_declared = False
-    if path:
-        path_clause = [models.RSEFileAssociation.path == path]
-        if path.startswith('/'):
-            path_clause.append(models.RSEFileAssociation.path == path[1:])
+    return_list = []
+    path_clause = []
+    did_clause = []
+    for scope, name, path in replicas:
+        if path:
+            path_clause.append(models.RSEFileAssociation.path == path)
+            if path.startswith('/'):
+                path_clause.append(models.RSEFileAssociation.path == path[1:])
+            else:
+                path_clause.append(models.RSEFileAssociation.path == '/%s' % path)
         else:
-            path_clause.append(models.RSEFileAssociation.path == '/%s' % path)
-        query = session.query(models.RSEFileAssociation.path, models.RSEFileAssociation.scope, models.RSEFileAssociation.name, models.RSEFileAssociation.rse_id, models.RSEFileAssociation.bytes).\
-            with_hint(models.RSEFileAssociation, "+ index(replicas REPLICAS_PATH_IDX", 'oracle').\
-            filter(models.RSEFileAssociation.rse_id == rse_id).filter(or_(*path_clause))
-    else:
-        query = session.query(models.RSEFileAssociation.path, models.RSEFileAssociation.scope, models.RSEFileAssociation.name, models.RSEFileAssociation.rse_id, models.RSEFileAssociation.bytes).\
-            filter_by(rse_id=rse_id, scope=scope, name=name)
-    if query.count():
-        result = query.first()
-        path, scope, name, rse_id, size = result
-        # Now we check that the replica is not already declared bad
-        query = session.query(models.BadReplicas.scope, models.BadReplicas.name, models.BadReplicas.rse_id, models.BadReplicas.state).\
-            filter_by(rse_id=rse_id, scope=scope, name=name, state=BadFilesStatus.BAD)
-        if query.count():
-            already_declared = True
-        return True, scope, name, already_declared, size
-    else:
-        return False, None, None, already_declared, None
+            did_clause.append(and_(models.RSEFileAssociation.scope == scope,
+                                   models.RSEFileAssociation.name == name))
+
+    for clause in [path_clause, did_clause]:
+        if clause:
+            for chunk in chunks(clause, 10):
+                query = session.query(models.RSEFileAssociation.path,
+                                      models.RSEFileAssociation.scope,
+                                      models.RSEFileAssociation.name,
+                                      models.RSEFileAssociation.rse_id,
+                                      models.RSEFileAssociation.bytes,
+                                      func.max(case([(models.BadReplicas.state == BadFilesStatus.SUSPICIOUS, 0),
+                                                     (models.BadReplicas.state == BadFilesStatus.BAD, 1)],
+                                                    else_=0))).\
+                    with_hint(models.RSEFileAssociation, "+ index(replicas REPLICAS_PATH_IDX", 'oracle').\
+                    outerjoin(models.BadReplicas,
+                              and_(models.RSEFileAssociation.scope == models.BadReplicas.scope,
+                                   models.RSEFileAssociation.name == models.BadReplicas.name,
+                                   models.RSEFileAssociation.rse_id == models.BadReplicas.rse_id)).\
+                    filter(models.RSEFileAssociation.rse_id == rse_id).filter(or_(*chunk)).\
+                    group_by(models.RSEFileAssociation.path,
+                             models.RSEFileAssociation.scope,
+                             models.RSEFileAssociation.name,
+                             models.RSEFileAssociation.rse_id,
+                             models.RSEFileAssociation.bytes)
+
+                for path, scope, name, rse_id, size, state in query.all():
+                    if (scope, name, path) in replicas:
+                        replicas.remove((scope, name, path))
+                    if (None, None, path) in replicas:
+                        replicas.remove((None, None, path))
+                    if (scope, name, None) in replicas:
+                        replicas.remove((scope, name, None))
+                    already_declared = False
+                    if state == 1:
+                        already_declared = True
+                    return_list.append((scope, name, path, True, already_declared, size))
+
+    for scope, name, path in replicas:
+        return_list.append((scope, name, path, False, False, None))
+
+    return return_list
 
 
 @read_session
@@ -311,7 +351,7 @@ def __declare_bad_file_replicas(pfns, rse_id, reason, issuer, status=BadFilesSta
     """
     Declare a list of bad replicas.
 
-    :param pfns: The list of PFNs.
+    :param pfns: Either a list of PFNs (string) or a list of replicas {'scope': <scope>, 'name': <name>, 'rse_id': <rse_id>}.
     :param rse_id: The RSE id.
     :param reason: The reason of the loss.
     :param issuer: The issuer account.
@@ -320,94 +360,79 @@ def __declare_bad_file_replicas(pfns, rse_id, reason, issuer, status=BadFilesSta
     :param session: The database session in use.
     """
     unknown_replicas = []
-    declared_replicas = []
-    rse_info = rsemgr.get_rse_info(rse_id=rse_id, session=session)
     replicas = []
-    proto = rsemgr.create_protocol(rse_info, 'read', scheme=scheme)
-    if rse_info['deterministic']:
-        parsed_pfn = proto.parse_pfns(pfns=pfns)
-        for pfn in parsed_pfn:
-            # WARNING : this part is ATLAS specific and must be changed
-            path = parsed_pfn[pfn]['path']
-            if path.startswith('/user') or path.startswith('/group'):
-                scope = '%s.%s' % (path.split('/')[1], path.split('/')[2])
-                name = parsed_pfn[pfn]['name']
-            elif path.startswith('/'):
-                scope = path.split('/')[1]
-                name = parsed_pfn[pfn]['name']
-            else:
-                scope = path.split('/')[0]
-                name = parsed_pfn[pfn]['name']
+    declared_replicas = []
+    path_pfn_dict = {}
 
-            scope = InternalScope(scope, vo=issuer.vo)
-
-            __exists, scope, name, already_declared, size = __exists_replicas(rse_id, scope, name, path=None, session=session)
-            if __exists and ((status == BadFilesStatus.BAD and not already_declared) or status == BadFilesStatus.SUSPICIOUS):
-                replicas.append({'scope': scope, 'name': name, 'rse_id': rse_id, 'state': ReplicaState.BAD})
-                new_bad_replica = models.BadReplicas(scope=scope, name=name, rse_id=rse_id, reason=reason, state=status, account=issuer, bytes=size)
-                new_bad_replica.save(session=session, flush=False)
-                session.query(models.Source).filter_by(scope=scope, name=name, rse_id=rse_id).delete(synchronize_session=False)
-                declared_replicas.append(pfn)
-            else:
-                if already_declared:
-                    unknown_replicas.append('%s %s' % (pfn, 'Already declared'))
+    if len(pfns) > 0 and type(pfns[0]) is str:
+        # If pfns is a list of PFNs, the scope and names need to be extracted from the path
+        rse_info = rsemgr.get_rse_info(rse_id=rse_id, session=session)
+        proto = rsemgr.create_protocol(rse_info, 'read', scheme=scheme)
+        if rse_info['deterministic']:
+            # TBD : In case of deterministic RSE, call the extract_scope_from_path method
+            parsed_pfn = proto.parse_pfns(pfns=pfns)
+            for pfn in parsed_pfn:
+                # WARNING : this part is ATLAS specific and must be changed
+                path = parsed_pfn[pfn]['path']
+                if path.startswith('/user') or path.startswith('/group'):
+                    scope = '%s.%s' % (path.split('/')[1], path.split('/')[2])
+                    name = parsed_pfn[pfn]['name']
+                elif path.startswith('/'):
+                    scope = path.split('/')[1]
+                    name = parsed_pfn[pfn]['name']
                 else:
-                    no_hidden_char = True
-                    for char in str(pfn):
-                        if not isprint(char):
-                            unknown_replicas.append('%s %s' % (pfn, 'PFN contains hidden chars'))
-                            no_hidden_char = False
-                            break
-                    if no_hidden_char:
-                        unknown_replicas.append('%s %s' % (pfn, 'Unknown replica'))
-        if status == BadFilesStatus.BAD:
-            # For BAD file, we modify the replica state, not for suspicious
-            try:
-                # there shouldn't be any exceptions since all replicas exist
-                update_replicas_states(replicas, session=session)
-            except exception.UnsupportedOperation:
-                raise exception.ReplicaNotFound("One or several replicas don't exist.")
+                    scope = path.split('/')[0]
+                    name = parsed_pfn[pfn]['name']
+
+                scope = InternalScope(scope, vo=issuer.vo)
+                replicas.append({'scope': scope, 'name': name, 'rse_id': rse_id, 'state': status})
+                path = '%s%s' % (parsed_pfn[pfn]['path'], parsed_pfn[pfn]['name'])
+                path_pfn_dict[path] = pfn
+
+        else:
+            # For non-deterministic RSEs use the path + rse_id to extract the scope
+            parsed_pfn = proto.parse_pfns(pfns=pfns)
+            for pfn in parsed_pfn:
+                path = '%s%s' % (parsed_pfn[pfn]['path'], parsed_pfn[pfn]['name'])
+                replicas.append({'scope': None, 'name': None, 'rse_id': rse_id, 'path': path, 'state': status})
+                path_pfn_dict[path] = pfn
+
     else:
-        path_clause = []
-        parsed_pfn = proto.parse_pfns(pfns=pfns)
-        for pfn in parsed_pfn:
-            path = '%s%s' % (parsed_pfn[pfn]['path'], parsed_pfn[pfn]['name'])
-            __exists, scope, name, already_declared, size = __exists_replicas(rse_id, scope=None, name=None, path=path, session=session)
-            if __exists and ((status == BadFilesStatus.BAD and not already_declared) or status == BadFilesStatus.SUSPICIOUS):
-                replicas.append({'scope': scope, 'name': name, 'rse_id': rse_id, 'state': ReplicaState.BAD})
-                new_bad_replica = models.BadReplicas(scope=scope, name=name, rse_id=rse_id, reason=reason, state=status, account=issuer, bytes=size)
-                new_bad_replica.save(session=session, flush=False)
-                session.query(models.Source).filter_by(scope=scope, name=name, rse_id=rse_id).delete(synchronize_session=False)
-                declared_replicas.append(pfn)
-                path_clause.append(models.RSEFileAssociation.path == path)
-                if path.startswith('/'):
-                    path_clause.append(models.RSEFileAssociation.path == path[1:])
-                else:
-                    path_clause.append(models.RSEFileAssociation.path == '/%s' % path)
-            else:
-                if already_declared:
-                    unknown_replicas.append('%s %s' % (pfn, 'Already declared'))
-                else:
-                    no_hidden_char = True
-                    for char in str(pfn):
-                        if not isprint(char):
-                            unknown_replicas.append('%s %s' % (pfn, 'PFN contains hidden chars'))
-                            no_hidden_char = False
-                            break
-                    if no_hidden_char:
-                        unknown_replicas.append('%s %s' % (pfn, 'Unknown replica'))
+        # If pfns is a list of replicas, just use scope, name and rse_id
+        for pfn in pfns:
+            replicas.append({'scope': pfn['scope'], 'name': pfn['name'], 'rse_id': rse_id, 'state': status})
 
-        if status == BadFilesStatus.BAD and declared_replicas != []:
-            # For BAD file, we modify the replica state, not for suspicious
-            query = session.query(models.RSEFileAssociation) \
-                .with_hint(models.RSEFileAssociation, "+ index(replicas REPLICAS_PATH_IDX", 'oracle') \
-                .filter(models.RSEFileAssociation.rse_id == rse_id) \
-                .filter(or_(*path_clause))
-            rowcount = query.update({'state': ReplicaState.BAD})
-            if rowcount != len(declared_replicas):
-                # there shouldn't be any exceptions since all replicas exist
-                print(rowcount, len(declared_replicas), declared_replicas)
-                raise exception.ReplicaNotFound("One or several replicas don't exist.")
+    replicas_list = []
+    for replica in replicas:
+        scope, name, rse_id, path = replica['scope'], replica['name'], replica['rse_id'], replica.get('path', None)
+        replicas_list.append((scope, name, path))
+
+    for scope, name, path, __exists, already_declared, size in __exist_replicas(rse_id=rse_id, replicas=replicas_list, session=session):
+        if __exists and ((status == BadFilesStatus.BAD and not already_declared) or status == BadFilesStatus.SUSPICIOUS):
+            declared_replicas.append({'scope': scope, 'name': name, 'rse_id': rse_id, 'state': ReplicaState.BAD})
+            new_bad_replica = models.BadReplicas(scope=scope, name=name, rse_id=rse_id, reason=reason, state=status, account=issuer, bytes=size)
+            new_bad_replica.save(session=session, flush=False)
+        else:
+            if already_declared:
+                unknown_replicas.append('%s %s' % (path_pfn_dict.get(path, '%s:%s' % (scope, name)), 'Already declared'))
+            elif path:
+                no_hidden_char = True
+                for char in str(path):
+                    if not isprint(char):
+                        unknown_replicas.append('%s %s' % (path, 'PFN contains hidden chars'))
+                        no_hidden_char = False
+                        break
+                if no_hidden_char:
+                    unknown_replicas.append('%s %s' % (path_pfn_dict[path], 'Unknown replica'))
+
+    if status == BadFilesStatus.BAD:
+        # For BAD file, we modify the replica state, not for suspicious
+        try:
+            # there shouldn't be any exceptions since all replicas exist
+            update_replicas_states(declared_replicas, session=session)
+        except exception.UnsupportedOperation:
+            raise exception.ReplicaNotFound("One or several replicas don't exist.")
+
     try:
         session.flush()
     except IntegrityError as error:
@@ -434,13 +459,15 @@ def add_bad_dids(dids, rse_id, reason, issuer, state=BadFilesStatus.BAD, session
     """
     unknown_replicas = []
     replicas_for_update = []
+    replicas_list = []
 
     for did in dids:
         scope = InternalScope(did['scope'], vo=issuer.vo)
         name = did['name']
-        replica_exists, _scope, _name, already_declared, size = __exists_replicas(rse_id, scope, name, path=None,
-                                                                                  session=session)
-        if replica_exists and not already_declared:
+        list_replicas.append((scope, name, None))
+
+    for scope, name, _, __exists, already_declared, size in __exist_replicas(rse_id=rse_id, replicas=replicas_list, session=session):
+        if __exists and not already_declared:
             replicas_for_update.append({'scope': scope, 'name': name, 'rse_id': rse_id, 'state': ReplicaState.BAD})
             new_bad_replica = models.BadReplicas(scope=scope, name=name, rse_id=rse_id, reason=reason, state=state,
                                                  account=issuer, bytes=size)
@@ -472,17 +499,32 @@ def declare_bad_file_replicas(pfns, reason, issuer, status=BadFilesStatus.BAD, s
     """
     Declare a list of bad replicas.
 
-    :param pfns: The list of PFNs.
+    :param pfns: Either a list of PFNs (string) or a list of replicas {'scope': <scope>, 'name': <name>, 'rse_id': <rse_id>}.
     :param reason: The reason of the loss.
     :param issuer: The issuer account.
     :param status: The status of the file (SUSPICIOUS or BAD).
     :param session: The database session in use.
     """
-    scheme, files_to_declare, unknown_replicas = get_pfn_to_rse(pfns, vo=issuer.vo, session=session)
-    for rse_id in files_to_declare:
-        notdeclared = __declare_bad_file_replicas(files_to_declare[rse_id], rse_id, reason, issuer, status=status, scheme=scheme, session=session)
-        if notdeclared:
-            unknown_replicas[rse_id] = notdeclared
+    unknown_replicas = {}
+    if pfns:
+        type_ = type(pfns[0])
+        files_to_declare = {}
+        for pfn in pfns:
+            if not isinstance(pfn, type_):
+                raise exception.InvalidType('The PFNs must be either a list of string or list of dict')
+        if type_ == str:
+            scheme, files_to_declare, unknown_replicas = get_pfn_to_rse(pfns, vo=issuer.vo, session=session)
+        else:
+            scheme = None
+            for pfn in pfns:
+                rse_id = pfn['rse_id']
+                if rse_id not in files_to_declare:
+                    files_to_declare[rse_id] = []
+                files_to_declare[rse_id].append(pfn)
+        for rse_id in files_to_declare:
+            notdeclared = __declare_bad_file_replicas(files_to_declare[rse_id], rse_id, reason, issuer, status=status, scheme=scheme, session=session)
+            if notdeclared:
+                unknown_replicas[rse_id] = notdeclared
     return unknown_replicas
 
 
@@ -1603,6 +1645,543 @@ def delete_replicas(rse_id, files, ignore_availability=True, session=None):
     :param ignore_availability: Ignore the RSE blocklisting.
     :param session: The database session in use.
     """
+    use_temp_tables = config_get_bool('core', 'use_temp_tables', default=False)
+    if use_temp_tables:
+        __delete_replicas(rse_id, files, ignore_availability=ignore_availability, session=session)
+    else:
+        __delete_replicas_without_temp_tables(rse_id, files, ignore_availability=ignore_availability, session=session)
+
+
+def __delete_replicas(rse_id, files, ignore_availability=True, session=None):
+    replica_rse = get_rse(rse_id=rse_id, session=session)
+
+    if not (replica_rse.availability & 1) and not ignore_availability:
+        raise exception.ResourceTemporaryUnavailable('%s is temporary unavailable'
+                                                     'for deleting' % replica_rse.rse)
+
+    columns = [
+        Column("scope", InternalScopeString(get_schema_value('SCOPE_LENGTH'))),
+        Column("name", String(get_schema_value('NAME_LENGTH'))),
+    ]
+    scope_name_temp_table = create_temp_table(
+        "delete_replicas",
+        *columns,
+        primary_key=columns,
+        session=session,
+    )
+    columns = [
+        Column("scope", InternalScopeString(get_schema_value('SCOPE_LENGTH'))),
+        Column("name", String(get_schema_value('NAME_LENGTH'))),
+    ]
+    scope_name_temp_table2 = create_temp_table(
+        "delete_replicas2",
+        *columns,
+        primary_key=columns,
+        session=session,
+    )
+    columns = [
+        Column("scope", InternalScopeString(get_schema_value('SCOPE_LENGTH'))),
+        Column("name", String(get_schema_value('NAME_LENGTH'))),
+        Column("child_scope", InternalScopeString(get_schema_value('SCOPE_LENGTH'))),
+        Column("child_name", String(get_schema_value('NAME_LENGTH'))),
+    ]
+    association_temp_table = create_temp_table(
+        "delete_replicas_association",
+        *columns,
+        primary_key=columns,
+        session=session,
+    )
+
+    session.bulk_insert_mappings(scope_name_temp_table, [{'scope': file['scope'], 'name': file['name']} for file in files])
+
+    # WARNING : This should not be necessary since that would mean the replica is used as a source.
+    stmt = delete(
+        models.Source,
+    ).where(
+        exists(select([1])
+               .where(and_(models.Source.scope == scope_name_temp_table.scope,
+                           models.Source.name == scope_name_temp_table.name,
+                           models.Source.rse_id == rse_id)))
+    ).execution_options(
+        synchronize_session=False
+    )
+    session.execute(stmt)
+
+    stmt = select(
+        func.count(),
+        func.sum(models.RSEFileAssociation.bytes),
+    ).join(
+        scope_name_temp_table,
+        and_(models.RSEFileAssociation.scope == scope_name_temp_table.scope,
+             models.RSEFileAssociation.name == scope_name_temp_table.name,
+             models.RSEFileAssociation.rse_id == rse_id)
+    )
+    delta, bytes_ = session.execute(stmt).one()
+
+    # Delete replicas
+    stmt = delete(
+        models.RSEFileAssociation,
+    ).where(
+        exists(select([1])
+               .where(and_(models.RSEFileAssociation.scope == scope_name_temp_table.scope,
+                           models.RSEFileAssociation.name == scope_name_temp_table.name,
+                           models.RSEFileAssociation.rse_id == rse_id)))
+    ).execution_options(
+        synchronize_session=False
+    )
+    res = session.execute(stmt)
+    if res.rowcount != len(files):
+        raise exception.ReplicaNotFound("One or several replicas don't exist.")
+
+    __cleanup_after_replica_deletion(scope_name_temp_table=scope_name_temp_table,
+                                     scope_name_temp_table2=scope_name_temp_table2,
+                                     association_temp_table=association_temp_table,
+                                     rse_id=rse_id, files=files, session=session)
+
+    # Decrease RSE counter
+    decrease(rse_id=rse_id, files=delta, bytes_=bytes_, session=session)
+
+
+@transactional_session
+def __cleanup_after_replica_deletion(scope_name_temp_table, scope_name_temp_table2, association_temp_table, rse_id, files, session=None):
+    """
+    Perform update of collections/archive associations/dids after the removal of their replicas
+    :param rse_id: the rse id
+    :param files: list of files whose replica got deleted
+    :param session: The database session in use.
+    """
+    clt_to_update, parents_to_analyze, affected_archives, clt_replicas_to_delete = set(), set(), set(), set()
+    did_condition = []
+    incomplete_dids, messages, clt_to_set_not_archive = [], [], []
+    for file in files:
+
+        # Schedule update of all collections containing this file and having a collection replica in the RSE
+        clt_to_update.add(ScopeName(scope=file['scope'], name=file['name']))
+
+        # If the file doesn't have any replicas anymore, we should perform cleanups of objects
+        # related to this file. However, if the file is "lost", it's removal wasn't intentional,
+        # so we want to skip deleting the metadata here. Perform cleanups:
+
+        # 1) schedule removal of this file from all parent datasets
+        parents_to_analyze.add(ScopeName(scope=file['scope'], name=file['name']))
+
+        # 2) schedule removal of this file from the DID table
+        did_condition.append(
+            and_(models.DataIdentifier.scope == file['scope'],
+                 models.DataIdentifier.name == file['name'],
+                 models.DataIdentifier.availability != DIDAvailability.LOST,
+                 ~exists(select([1]).prefix_with("/*+ INDEX(REPLICAS REPLICAS_PK) */", dialect='oracle')).where(
+                     and_(models.RSEFileAssociation.scope == file['scope'],
+                          models.RSEFileAssociation.name == file['name'])),
+                 ~exists(select([1]).prefix_with("/*+ INDEX(ARCHIVE_CONTENTS ARCH_CONTENTS_PK) */", dialect='oracle')).where(
+                     and_(models.ConstituentAssociation.child_scope == file['scope'],
+                          models.ConstituentAssociation.child_name == file['name']))))
+
+        # 3) if the file is an archive, schedule cleanup on the files from inside the archive
+        affected_archives.add(ScopeName(scope=file['scope'], name=file['name']))
+
+    # Get all collection_replicas at RSE, insert them into UpdatedCollectionReplica
+    session.query(scope_name_temp_table).delete()
+    session.bulk_insert_mappings(scope_name_temp_table, [sn._asdict() for sn in clt_to_update])
+    stmt = select(
+        models.DataIdentifierAssociation.scope,
+        models.DataIdentifierAssociation.name,
+    ).distinct(
+    ).join(
+        scope_name_temp_table,
+        and_(scope_name_temp_table.scope == models.DataIdentifierAssociation.child_scope,
+             scope_name_temp_table.name == models.DataIdentifierAssociation.child_name)
+    ).join(
+        models.CollectionReplica,
+        and_(models.CollectionReplica.scope == models.DataIdentifierAssociation.scope,
+             models.CollectionReplica.name == models.DataIdentifierAssociation.name,
+             models.CollectionReplica.rse_id == rse_id)
+    )
+    for parent_scope, parent_name in session.execute(stmt):
+        models.UpdatedCollectionReplica(scope=parent_scope,
+                                        name=parent_name,
+                                        did_type=DIDType.DATASET,
+                                        rse_id=rse_id). \
+            save(session=session, flush=False)
+
+    # Delete did from the content for the last did
+    while parents_to_analyze:
+        did_associations_to_remove = set()
+
+        session.query(scope_name_temp_table).delete()
+        session.bulk_insert_mappings(scope_name_temp_table, [sn._asdict() for sn in parents_to_analyze])
+        parents_to_analyze.clear()
+
+        stmt = select(
+            models.DataIdentifierAssociation.scope,
+            models.DataIdentifierAssociation.name,
+            models.DataIdentifierAssociation.did_type,
+            models.DataIdentifierAssociation.child_scope,
+            models.DataIdentifierAssociation.child_name,
+        ).distinct(
+        ).join(
+            scope_name_temp_table,
+            and_(scope_name_temp_table.scope == models.DataIdentifierAssociation.child_scope,
+                 scope_name_temp_table.name == models.DataIdentifierAssociation.child_name)
+        ).outerjoin(
+            models.DataIdentifier,
+            and_(models.DataIdentifier.availability == DIDAvailability.LOST,
+                 models.DataIdentifier.scope == models.DataIdentifierAssociation.child_scope,
+                 models.DataIdentifier.name == models.DataIdentifierAssociation.child_name)
+        ).where(
+            models.DataIdentifier.scope == null()
+        ).outerjoin(
+            models.RSEFileAssociation,
+            and_(models.RSEFileAssociation.scope == models.DataIdentifierAssociation.child_scope,
+                 models.RSEFileAssociation.name == models.DataIdentifierAssociation.child_name)
+        ).where(
+            models.RSEFileAssociation.scope == null()
+        ).outerjoin(
+            models.ConstituentAssociation,
+            and_(models.ConstituentAssociation.child_scope == models.DataIdentifierAssociation.child_scope,
+                 models.ConstituentAssociation.child_name == models.DataIdentifierAssociation.child_name)
+        ).where(
+            models.ConstituentAssociation.child_scope == null()
+        )
+
+        clt_to_set_not_archive.append(set())
+        for parent_scope, parent_name, did_type, child_scope, child_name in session.execute(stmt):
+
+            # Schedule removal of child file/dataset/container from the parent dataset/container
+            did_associations_to_remove.add(Association(scope=parent_scope, name=parent_name,
+                                                       child_scope=child_scope, child_name=child_name))
+
+            # Schedule setting is_archive = False on parents which don't have any children with is_archive == True anymore
+            clt_to_set_not_archive[-1].add(ScopeName(scope=parent_scope, name=parent_name))
+
+            # If the parent dataset/container becomes empty as a result of the child removal
+            # (it was the last children), metadata cleanup has to be done:
+            #
+            # 1) Schedule to remove the replicas of this empty collection
+            clt_replicas_to_delete.add(ScopeName(scope=parent_scope, name=parent_name))
+
+            # 2) Schedule removal of this empty collection from its own parent collections
+            parents_to_analyze.add(ScopeName(scope=parent_scope, name=parent_name))
+
+            # 3) Schedule removal of the entry from the DIDs table
+            remove_open_did = config_get('reaper', 'remove_open_did', default=False, session=session)
+            if remove_open_did:
+                did_condition.append(
+                    and_(models.DataIdentifier.scope == parent_scope,
+                         models.DataIdentifier.name == parent_name,
+                         ~exists([1]).where(
+                             and_(models.DataIdentifierAssociation.child_scope == parent_scope,
+                                  models.DataIdentifierAssociation.child_name == parent_name)),
+                         ~exists([1]).where(
+                             and_(models.DataIdentifierAssociation.scope == parent_scope,
+                                  models.DataIdentifierAssociation.name == parent_name))))
+            else:
+                did_condition.append(
+                    and_(models.DataIdentifier.scope == parent_scope,
+                         models.DataIdentifier.name == parent_name,
+                         models.DataIdentifier.is_open == False,  # NOQA
+                         ~exists([1]).where(
+                             and_(models.DataIdentifierAssociation.child_scope == parent_scope,
+                                  models.DataIdentifierAssociation.child_name == parent_name)),
+                         ~exists([1]).where(
+                             and_(models.DataIdentifierAssociation.scope == parent_scope,
+                                  models.DataIdentifierAssociation.name == parent_name))))
+
+        if did_associations_to_remove:
+            session.query(association_temp_table).delete()
+            session.bulk_insert_mappings(association_temp_table, [a._asdict() for a in did_associations_to_remove])
+
+            # get the list of modified parent scope, name
+            stmt = select(
+                models.DataIdentifier.scope,
+                models.DataIdentifier.name,
+                models.DataIdentifier.did_type,
+            ).distinct(
+            ).join(
+                association_temp_table,
+                and_(association_temp_table.scope == models.DataIdentifier.scope,
+                     association_temp_table.name == models.DataIdentifier.name)
+            ).where(
+                or_(models.DataIdentifier.complete == true(),
+                    models.DataIdentifier.complete is None),
+            )
+            for parent_scope, parent_name, parent_did_type in session.execute(stmt):
+                message = {'scope': parent_scope,
+                           'name': parent_name,
+                           'did_type': parent_did_type,
+                           'event_type': 'INCOMPLETE'}
+                if message not in messages:
+                    messages.append(message)
+                    incomplete_dids.append(ScopeName(scope=parent_scope, name=parent_name))
+
+            content_to_delete_filter = exists(select([1])
+                                              .where(and_(association_temp_table.scope == models.DataIdentifierAssociation.scope,
+                                                          association_temp_table.name == models.DataIdentifierAssociation.name,
+                                                          association_temp_table.child_scope == models.DataIdentifierAssociation.child_scope,
+                                                          association_temp_table.child_name == models.DataIdentifierAssociation.child_name)))
+
+            rucio.core.did.insert_content_history(filter_=content_to_delete_filter, did_created_at=None, session=session)
+
+            stmt = delete(
+                models.DataIdentifierAssociation
+            ).where(
+                content_to_delete_filter,
+            ).execution_options(
+                synchronize_session=False
+            )
+            session.execute(stmt)
+
+    # Get collection replicas of collections which became empty
+    session.query(scope_name_temp_table).delete()
+    session.bulk_insert_mappings(scope_name_temp_table, [sn._asdict() for sn in clt_replicas_to_delete])
+    session.query(scope_name_temp_table2).delete()
+    stmt = select(
+        models.CollectionReplica.scope,
+        models.CollectionReplica.name,
+    ).distinct(
+    ).join(
+        scope_name_temp_table,
+        and_(scope_name_temp_table.scope == models.CollectionReplica.scope,
+             scope_name_temp_table.name == models.CollectionReplica.name),
+    ).join(
+        models.DataIdentifier,
+        and_(models.DataIdentifier.scope == models.CollectionReplica.scope,
+             models.DataIdentifier.name == models.CollectionReplica.name)
+    ).outerjoin(
+        models.DataIdentifierAssociation,
+        and_(models.DataIdentifierAssociation.scope == models.CollectionReplica.scope,
+             models.DataIdentifierAssociation.name == models.CollectionReplica.name)
+    ).where(
+        models.DataIdentifierAssociation.scope == null()
+    )
+    session.execute(
+        insert(scope_name_temp_table2).from_select(['scope', 'name'], stmt)
+    )
+    # Delete the retrieved collection replicas of empty collections
+    stmt = delete(
+        models.CollectionReplica,
+    ).where(
+        exists(select([1])
+               .where(and_(models.CollectionReplica.scope == scope_name_temp_table2.scope,
+                           models.CollectionReplica.name == scope_name_temp_table2.name)))
+    ).execution_options(
+        synchronize_session=False
+    )
+    session.execute(stmt)
+
+    # Update incomplete state
+    session.query(scope_name_temp_table).delete()
+    session.bulk_insert_mappings(scope_name_temp_table, [sn._asdict() for sn in incomplete_dids])
+    stmt = update(
+        models.DataIdentifier
+    ).where(
+        exists(select([1])
+               .where(and_(models.DataIdentifier.scope == scope_name_temp_table.scope,
+                           models.DataIdentifier.name == scope_name_temp_table.name)))
+    ).where(
+        models.DataIdentifier.complete != false(),
+    ).execution_options(
+        synchronize_session=False
+    ).values(
+        complete=False
+    )
+    session.execute(stmt)
+
+    # delete empty dids
+    messages, dids_to_delete = [], set()
+    for chunk in chunks(did_condition, 10):
+        query = session.query(models.DataIdentifier.scope,
+                              models.DataIdentifier.name,
+                              models.DataIdentifier.did_type). \
+            with_hint(models.DataIdentifier, "INDEX(DIDS DIDS_PK)", 'oracle'). \
+            filter(or_(*chunk))
+        for scope, name, did_type in query:
+            if did_type == DIDType.DATASET:
+                messages.append({'event_type': 'ERASE',
+                                 'payload': dumps({'scope': scope.external,
+                                                   'name': name,
+                                                   'account': 'root'})})
+            dids_to_delete.add(ScopeName(scope=scope, name=name))
+
+    # Remove Archive Constituents
+    session.query(scope_name_temp_table).delete()
+    session.bulk_insert_mappings(scope_name_temp_table, [sn._asdict() for sn in affected_archives])
+
+    stmt = select(
+        models.ConstituentAssociation
+    ).distinct(
+    ).join(
+        scope_name_temp_table,
+        and_(scope_name_temp_table.scope == models.ConstituentAssociation.scope,
+             scope_name_temp_table.name == models.ConstituentAssociation.name),
+    ).outerjoin(
+        models.DataIdentifier,
+        and_(models.DataIdentifier.availability == DIDAvailability.LOST,
+             models.DataIdentifier.scope == models.ConstituentAssociation.scope,
+             models.DataIdentifier.name == models.ConstituentAssociation.name)
+    ).where(
+        models.DataIdentifier.scope == null()
+    ).outerjoin(
+        models.RSEFileAssociation,
+        and_(models.RSEFileAssociation.scope == models.ConstituentAssociation.scope,
+             models.RSEFileAssociation.name == models.ConstituentAssociation.name)
+    ).where(
+        models.RSEFileAssociation.scope == null()
+    )
+
+    constituent_associations_to_delete = set()
+    for constituent in session.execute(stmt).scalars().all():
+        constituent_associations_to_delete.add(Association(scope=constituent.scope, name=constituent.name,
+                                                           child_scope=constituent.child_scope, child_name=constituent.child_name))
+        models.ConstituentAssociationHistory(
+            child_scope=constituent.child_scope,
+            child_name=constituent.child_name,
+            scope=constituent.scope,
+            name=constituent.name,
+            bytes=constituent.bytes,
+            adler32=constituent.adler32,
+            md5=constituent.md5,
+            guid=constituent.guid,
+            length=constituent.length,
+            updated_at=constituent.updated_at,
+            created_at=constituent.created_at,
+        ).save(session=session, flush=False)
+
+    if constituent_associations_to_delete:
+        session.query(association_temp_table).delete()
+        session.bulk_insert_mappings(association_temp_table, [a._asdict() for a in constituent_associations_to_delete])
+        stmt = delete(
+            models.ConstituentAssociation
+        ).where(
+            exists(select([1])
+                   .where(and_(association_temp_table.scope == models.ConstituentAssociation.scope,
+                               association_temp_table.name == models.ConstituentAssociation.name,
+                               association_temp_table.child_scope == models.ConstituentAssociation.child_scope,
+                               association_temp_table.child_name == models.ConstituentAssociation.child_name)))
+        ).execution_options(
+            synchronize_session=False
+        )
+        session.execute(stmt)
+
+        removed_constituents = {ScopeName(scope=c.child_scope, name=c.child_name) for c in constituent_associations_to_delete}
+        for chunk in chunks(removed_constituents, 200):
+            __cleanup_after_replica_deletion(scope_name_temp_table=scope_name_temp_table,
+                                             scope_name_temp_table2=scope_name_temp_table2,
+                                             association_temp_table=association_temp_table,
+                                             rse_id=rse_id, files=[sn._asdict() for sn in chunk], session=session)
+
+    session.query(scope_name_temp_table).delete()
+    session.bulk_insert_mappings(scope_name_temp_table, [sn._asdict() for sn in dids_to_delete])
+
+    # Remove rules in Waiting for approval or Suspended
+    stmt = delete(
+        models.ReplicationRule,
+    ).where(
+        exists(select([1])
+               .where(and_(models.ReplicationRule.scope == scope_name_temp_table.scope,
+                           models.ReplicationRule.name == scope_name_temp_table.name)))
+    ).where(
+        models.ReplicationRule.state.in_((RuleState.SUSPENDED, RuleState.WAITING_APPROVAL))
+    ).execution_options(
+        synchronize_session=False
+    )
+    session.execute(stmt)
+
+    # Remove DID Metadata
+    must_delete_did_meta = True
+    if session.bind.dialect.name == 'oracle':
+        oracle_version = int(session.connection().connection.version.split('.')[0])
+        if oracle_version < 12:
+            must_delete_did_meta = False
+    if must_delete_did_meta:
+        stmt = delete(
+            models.DidMeta,
+        ).where(
+            exists(select([1])
+                   .where(and_(models.DidMeta.scope == scope_name_temp_table.scope,
+                               models.DidMeta.name == scope_name_temp_table.name)))
+        ).execution_options(
+            synchronize_session=False
+        )
+        session.execute(stmt)
+
+    for chunk in chunks(messages, 100):
+        session.bulk_insert_mappings(models.Message, chunk)
+
+    # Delete dids
+    dids_to_delete_filter = exists(select([1])
+                                   .where(and_(models.DataIdentifier.scope == scope_name_temp_table.scope,
+                                               models.DataIdentifier.name == scope_name_temp_table.name)))
+    archive_dids = config_core.get('deletion', 'archive_dids', default=False, session=session)
+    if archive_dids:
+        rucio.core.did.insert_deleted_dids(filter_=dids_to_delete_filter, session=session)
+    stmt = delete(
+        models.DataIdentifier,
+    ).where(
+        dids_to_delete_filter,
+    ).execution_options(
+        synchronize_session=False
+    )
+    session.execute(stmt)
+
+    # Set is_archive = false on collections which don't have archive children anymore
+    while clt_to_set_not_archive:
+        session.query(scope_name_temp_table).delete()
+        session.bulk_insert_mappings(scope_name_temp_table, [sn._asdict() for sn in clt_to_set_not_archive[0]])
+        session.query(scope_name_temp_table2).delete()
+
+        data_identifier_alias = aliased(models.DataIdentifier, name='did_alias')
+        # Fetch rows to be updated
+        stmt = select(
+            models.DataIdentifier.scope,
+            models.DataIdentifier.name,
+        ).distinct(
+        ).where(
+            models.DataIdentifier.is_archive == true()
+        ).join(
+            scope_name_temp_table,
+            and_(scope_name_temp_table.scope == models.DataIdentifier.scope,
+                 scope_name_temp_table.name == models.DataIdentifier.name)
+        ).join(
+            models.DataIdentifierAssociation,
+            and_(models.DataIdentifier.scope == models.DataIdentifierAssociation.scope,
+                 models.DataIdentifier.name == models.DataIdentifierAssociation.name)
+        ).outerjoin(
+            data_identifier_alias,
+            and_(data_identifier_alias.scope == models.DataIdentifierAssociation.child_scope,
+                 data_identifier_alias.name == models.DataIdentifierAssociation.child_name,
+                 data_identifier_alias.is_archive == true())
+        ).where(
+            data_identifier_alias.scope == null()
+        )
+        session.execute(insert(scope_name_temp_table2).from_select(['scope', 'name'], stmt))
+        # update the fetched rows
+        stmt = update(
+            models.DataIdentifier,
+        ).where(
+            exists(select([1])
+                   .where(and_(models.DataIdentifier.scope == scope_name_temp_table2.scope,
+                               models.DataIdentifier.name == scope_name_temp_table2.name)))
+        ).execution_options(
+            synchronize_session=False
+        ).values(
+            is_archive=False,
+        )
+        session.execute(stmt)
+
+        clt_to_set_not_archive.pop(0)
+
+
+@transactional_session
+def __delete_replicas_without_temp_tables(rse_id, files, ignore_availability=True, session=None):
+    """
+    Delete file replicas.
+
+    :param rse_id: the rse id.
+    :param files: the list of files to delete.
+    :param ignore_availability: Ignore the RSE blocklisting.
+    :param session: The database session in use.
+    """
     replica_rse = get_rse(rse_id=rse_id, session=session)
 
     if not (replica_rse.availability & 1) and not ignore_availability:
@@ -1646,14 +2225,14 @@ def delete_replicas(rse_id, files, ignore_availability=True, session=None):
     if rowcount != len(files):
         raise exception.ReplicaNotFound("One or several replicas don't exist.")
 
-    __cleanup_after_replica_deletion(rse_id=rse_id, files=files, session=session)
+    __cleanup_after_replica_deletion_without_temp_table(rse_id=rse_id, files=files, session=session)
 
     # Decrease RSE counter
     decrease(rse_id=rse_id, files=delta, bytes_=bytes_, session=session)
 
 
 @transactional_session
-def __cleanup_after_replica_deletion(rse_id, files, session=None):
+def __cleanup_after_replica_deletion_without_temp_table(rse_id, files, session=None):
     """
     Perform update of collections/archive associations/dids after the removal of their replicas
     :param rse_id: the rse id
@@ -1743,7 +2322,7 @@ def __cleanup_after_replica_deletion(rse_id, files, session=None):
                 models.DataIdentifierAssociation.child_scope,
                 models.DataIdentifierAssociation.child_name,
             ).prefix_with(
-                "/*+ NO_INDEX_FFS(CONTENTS CONTENTS_PK) */",
+                "/*+ USE_CONCAT NO_INDEX_FFS(CONTENTS CONTENTS_PK) */",
                 dialect='oracle',
             ).where(
                 or_(*chunk)
@@ -1845,7 +2424,7 @@ def __cleanup_after_replica_deletion(rse_id, files, session=None):
                                  models.DataIdentifier.did_type == parent_did_type))
 
             for chunk in chunks(child_did_condition, 10):
-                rucio.core.did.insert_content_history(content_clause=chunk, did_created_at=None, session=session)
+                rucio.core.did.insert_content_history(filter_=or_(*chunk), did_created_at=None, session=session)
                 session.query(models.DataIdentifierAssociation).\
                     filter(or_(*chunk)).\
                     delete(synchronize_session=False)
@@ -1931,7 +2510,7 @@ def __cleanup_after_replica_deletion(rse_id, files, session=None):
                 session.execute(stmt)
                 constituents_to_delete_condition.clear()
 
-                __cleanup_after_replica_deletion(rse_id=rse_id, files=removed_constituents, session=session)
+                __cleanup_after_replica_deletion_without_temp_table(rse_id=rse_id, files=removed_constituents, session=session)
                 removed_constituents.clear()
     if constituents_to_delete_condition:
         stmt = delete(models.ConstituentAssociation). \
@@ -1939,7 +2518,7 @@ def __cleanup_after_replica_deletion(rse_id, files, session=None):
             where(or_(*constituents_to_delete_condition)). \
             execution_options(synchronize_session=False)
         session.execute(stmt)
-        __cleanup_after_replica_deletion(rse_id=rse_id, files=removed_constituents, session=session)
+        __cleanup_after_replica_deletion_without_temp_table(rse_id=rse_id, files=removed_constituents, session=session)
 
     # Remove rules in Waiting for approval or Suspended
     for chunk in chunks(deleted_rules, 100):
@@ -1967,7 +2546,7 @@ def __cleanup_after_replica_deletion(rse_id, files, session=None):
             execution_options(synchronize_session=False)
         archive_dids = config_core.get('deletion', 'archive_dids', default=False, session=session)
         if archive_dids:
-            rucio.core.did.insert_deleted_dids(chunk, session=session)
+            rucio.core.did.insert_deleted_dids(filter_=or_(*chunk), session=session)
         session.execute(stmt)
 
     # Set is_archive = false on collections which don't have archive children anymore
@@ -2019,6 +2598,143 @@ def list_and_mark_unlocked_replicas(limit, bytes_=None, rse_id=None, delay_secon
     List RSE File replicas with no locks.
 
     :param limit:                    Number of replicas returned.
+    :param bytes_:                   The amount of needed bytes.
+    :param rse_id:                   The rse_id.
+    :param delay_seconds:            The delay to query replicas in BEING_DELETED state
+    :param only_delete_obsolete      If set to True, will only return the replicas with EPOCH tombstone
+    :param session:                  The database session in use.
+
+    :returns: a list of dictionary replica.
+    """
+
+    needed_space = bytes_
+    total_bytes = 0
+    rows = []
+
+    columns = [
+        Column("scope", InternalScopeString(get_schema_value('SCOPE_LENGTH'))),
+        Column("name", String(get_schema_value('NAME_LENGTH'))),
+    ]
+    temp_table_cls = create_temp_table(
+        "list_and_mark_unlocked_replicas",
+        *columns,
+        primary_key=columns,
+        session=session,
+    )
+
+    replicas_alias = aliased(models.RSEFileAssociation, name='replicas_alias')
+
+    stmt = select(
+        models.RSEFileAssociation.scope,
+        models.RSEFileAssociation.name,
+    ).with_hint(
+        models.RSEFileAssociation, "INDEX_RS_ASC(replicas REPLICAS_TOMBSTONE_IDX)  NO_INDEX_FFS(replicas REPLICAS_TOMBSTONE_IDX)", 'oracle'
+    ).where(
+        models.RSEFileAssociation.lock_cnt == 0,
+        # The following CASE is to mimic the Oracle's functional "tombstone" index. Otherwise the optimiser doesn't use the index.
+        case([(models.RSEFileAssociation.tombstone != null(), models.RSEFileAssociation.rse_id), ]) == rse_id,
+        models.RSEFileAssociation.tombstone == OBSOLETE if only_delete_obsolete else models.RSEFileAssociation.tombstone < datetime.utcnow(),
+    ).where(
+        or_(models.RSEFileAssociation.state.in_((ReplicaState.AVAILABLE, ReplicaState.UNAVAILABLE, ReplicaState.BAD)),
+            and_(models.RSEFileAssociation.state == ReplicaState.BEING_DELETED, models.RSEFileAssociation.updated_at < datetime.utcnow() - timedelta(seconds=delay_seconds)))
+    ).outerjoin(
+        models.Source,
+        and_(models.RSEFileAssociation.scope == models.Source.scope,
+             models.RSEFileAssociation.name == models.Source.name,
+             models.RSEFileAssociation.rse_id == models.Source.rse_id)
+    ).where(
+        models.Source.scope.is_(None)  # Only try to delete replicas if they are not used as sources in any transfers
+    ).order_by(
+        models.RSEFileAssociation.tombstone
+    ).with_for_update(
+        skip_locked=True,
+        # oracle: we must specify a column, not a table; however, it doesn't matter which column, the lock is put on the whole row
+        # postgresql/mysql: sqlalchemy driver automatically converts it to a table name
+        # sqlite: this is completely ignored
+        of=models.RSEFileAssociation.scope,
+    )
+
+    for chunk in chunks(session.execute(stmt).yield_per(2 * limit), math.ceil(1.25 * limit)):
+        session.query(temp_table_cls).delete()
+        session.bulk_insert_mappings(temp_table_cls, [{'scope': scope, 'name': name} for scope, name in chunk])
+
+        stmt = select(
+            models.RSEFileAssociation.scope,
+            models.RSEFileAssociation.name,
+            models.RSEFileAssociation.path,
+            models.RSEFileAssociation.bytes,
+            models.RSEFileAssociation.tombstone,
+            models.RSEFileAssociation.state,
+        ).join(
+            temp_table_cls,
+            and_(models.RSEFileAssociation.scope == temp_table_cls.scope,
+                 models.RSEFileAssociation.name == temp_table_cls.name,
+                 models.RSEFileAssociation.rse_id == rse_id)
+        ).with_hint(
+            replicas_alias, "index(%(name)s REPLICAS_PK)", 'oracle'
+        ).outerjoin(
+            replicas_alias,
+            and_(models.RSEFileAssociation.scope == replicas_alias.scope,
+                 models.RSEFileAssociation.name == replicas_alias.name,
+                 models.RSEFileAssociation.rse_id != replicas_alias.rse_id)
+        ).with_hint(
+            models.Request, "INDEX(requests REQUESTS_SCOPE_NAME_RSE_IDX)", 'oracle'
+        ).outerjoin(
+            models.Request,
+            and_(models.RSEFileAssociation.scope == models.Request.scope,
+                 models.RSEFileAssociation.name == models.Request.name)
+        ).group_by(
+            models.RSEFileAssociation
+        ).having(
+            case([(func.count(replicas_alias.scope) > 0, True),  # Can delete this replica if it's not the last replica
+                  (func.count(models.Request.scope) == 0, True)],  # If it's the last replica, only can delete if there are no requests using it
+                 else_=False).label("can_delete"),
+        ).order_by(
+            models.RSEFileAssociation.tombstone
+        ).limit(
+            limit - len(rows)
+        )
+
+        for scope, name, path, bytes_, tombstone, state in session.execute(stmt):
+            if len(rows) >= limit or (needed_space is not None and total_bytes > needed_space):
+                break
+            if state != ReplicaState.UNAVAILABLE:
+                total_bytes += bytes_
+
+            rows.append({'scope': scope, 'name': name, 'path': path,
+                         'bytes': bytes_, 'tombstone': tombstone,
+                         'state': state})
+        if len(rows) >= limit or (needed_space is not None and total_bytes > needed_space):
+            break
+
+    if rows:
+        session.query(temp_table_cls).delete()
+        session.bulk_insert_mappings(temp_table_cls, [{'scope': r['scope'], 'name': r['name']} for r in rows])
+        stmt = update(
+            models.RSEFileAssociation
+        ).where(
+            exists(select([1]).prefix_with("/*+ INDEX(REPLICAS REPLICAS_PK) */", dialect='oracle')
+                   .where(and_(models.RSEFileAssociation.scope == temp_table_cls.scope,
+                               models.RSEFileAssociation.name == temp_table_cls.name,
+                               models.RSEFileAssociation.rse_id == rse_id)))
+        ).execution_options(
+            synchronize_session=False
+        ).values(
+            updated_at=datetime.utcnow(),
+            state=ReplicaState.BEING_DELETED,
+            tombstone=OBSOLETE,
+        )
+        session.execute(stmt)
+
+    return rows
+
+
+@transactional_session
+def list_and_mark_unlocked_replicas_no_temp_table(limit, bytes_=None, rse_id=None, delay_seconds=600, only_delete_obsolete=False, session=None):
+    """
+    List RSE File replicas with no locks.
+
+    :param limit:                    Number of replicas returned.
     :param bytes_:                    The amount of needed bytes.
     :param rse_id:                   The rse_id.
     :param delay_seconds:            The delay to query replicas in BEING_DELETED state
@@ -2059,17 +2775,18 @@ def list_and_mark_unlocked_replicas(limit, bytes_=None, rse_id=None, delay_secon
             filter(and_(models.RSEFileAssociation.scope == scope, models.RSEFileAssociation.name == name, models.RSEFileAssociation.rse_id != rse_id)).one()
 
         if replica_cnt[0] > 1:
+            if tombstone != OBSOLETE and only_delete_obsolete:
+                break
+
+            if needed_space is not None and total_bytes > needed_space:
+                break
+
             if state != ReplicaState.UNAVAILABLE:
-                if tombstone != OBSOLETE:
-                    if only_delete_obsolete:
-                        break
-                    if needed_space is not None and total_bytes > needed_space:
-                        break
                 total_bytes += bytes_
 
-                total_files += 1
-                if total_files > limit:
-                    break
+            total_files += 1
+            if total_files > limit:
+                break
 
             rows.append({'scope': scope, 'name': name, 'path': path,
                          'bytes': bytes_, 'tombstone': tombstone,
@@ -2085,12 +2802,14 @@ def list_and_mark_unlocked_replicas(limit, bytes_=None, rse_id=None, delay_secon
                             models.Request.name == name)).one()
 
             if request_cnt[0] == 0:
-                if tombstone != OBSOLETE:
-                    if only_delete_obsolete:
-                        break
-                    if needed_space is not None and total_bytes > needed_space:
-                        break
-                total_bytes += bytes_
+                if tombstone != OBSOLETE and only_delete_obsolete:
+                    break
+
+                if needed_space is not None and total_bytes > needed_space:
+                    break
+
+                if state != ReplicaState.UNAVAILABLE:
+                    total_bytes += bytes_
 
                 total_files += 1
                 if total_files > limit:

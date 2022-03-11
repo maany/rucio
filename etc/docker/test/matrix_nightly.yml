@@ -1,0 +1,47 @@
+dists:
+  - id: centos7
+    allow:
+      python:
+        - "2.7"
+        - "3.6"
+        - "3.7"
+  - id: fedora32
+    allow:
+      python:
+        - "3.8"
+  - id: fedora33
+    allow:
+      python:
+        - "3.9"
+python:
+  - id: "2.7"
+    allow:
+      suites:
+        - client
+        - client_syntax
+  - "3.6"
+  - "3.7"
+  - "3.8"
+  - "3.9"
+suites:
+  - id: syntax
+    SYNTAX_REPORT: 1
+    RUN_HTTPD: false
+  - id: docs
+    RUN_HTTPD: false
+  - id: client_syntax
+    RUN_HTTPD: false
+    allow:
+      python: "2.7"
+  - id: client
+    RDBMS: sqlite
+  - id: all
+    RDBMS:
+      - oracle
+      - mysql8
+      - postgres14
+      - sqlite
+  - id: multi_vo
+    RDBMS: postgres14
+image_identifier:
+  - autotest

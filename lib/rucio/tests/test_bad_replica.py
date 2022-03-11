@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright 2021 CERN
+# Copyright 2021-2022 CERN
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
 # limitations under the License.
 #
 # Authors:
-# - Cedric Serfon <cedric.serfon@cern.ch>, 2021
+# - Cedric Serfon <cedric.serfon@cern.ch>, 2021-2022
 
 from __future__ import print_function
 
@@ -23,7 +23,7 @@ from json import dumps, loads
 
 import pytest
 
-from rucio.common.exception import RucioException, UnsupportedOperation
+from rucio.common.exception import RucioException, UnsupportedOperation, InvalidType
 from rucio.common.utils import generate_uuid, clean_surls
 from rucio.core.replica import add_replicas, get_replicas_state, list_replicas, declare_bad_file_replicas, list_bad_replicas, get_bad_pfns, get_bad_replicas_backlog
 from rucio.daemons.badreplicas.minos import run as minos_run
@@ -82,6 +82,16 @@ def test_add_list_bad_replicas(rse_factory, mock_scope, root_account):
                 if badrep['scope'] == rep['scope'] and badrep['name'] == rep['name']:
                     nbbadrep += 1
     assert len(replicas) == nbbadrep
+
+    # Try adding replicas already declared bad
+    r = declare_bad_file_replicas(replicas, 'This is a good reason', root_account)
+    output = ['%s Unknown replica' % rep for rep in replicas]
+    assert list(r.keys()) == [rse2_id]
+    list1 = r[rse2_id]
+    list1.sort()
+    list2 = ['%s Already declared' % clean_surls([rep])[0] for rep in replicas]
+    list2.sort()
+    assert list1 == list2
 
     # Now adding non-existing bad replicas
     files = ['srm://%s.cern.ch/test/%s/%s' % (rse2_id, mock_scope, generate_uuid()), ]
@@ -194,9 +204,7 @@ def test_client_add_list_bad_replicas(rse_factory, replica_client, did_client):
     for replica in replica_client.list_replicas(dids=[{'scope': f['scope'], 'name': f['name']} for f in files], schemes=['srm'], all_states=True):
         replicas.extend(replica['rses'][rse2])
         list_rep.append(replica)
-    print(replicas, list_rep)
     r = replica_client.declare_bad_file_replicas(replicas, 'This is a good reason')
-    print(r)
     assert r == {}
     bad_replicas = list_bad_replicas()
     nbbadrep = 0
@@ -212,6 +220,33 @@ def test_client_add_list_bad_replicas(rse_factory, replica_client, did_client):
     r = replica_client.declare_bad_file_replicas(files, 'This is a good reason')
     output = ['%s Unknown replica' % rep for rep in files]
     assert r == {rse2: output}
+
+    # Now test adding bad_replicas with a list of replicas instead of PFNs
+    # Adding replicas to deterministic RSE
+    rse3, rse3_id = rse_factory.make_srm_rse(deterministic=True)
+    files = [{'scope': tmp_scope, 'name': 'file_%s' % generate_uuid(), 'bytes': 1, 'adler32': '0cc737eb', 'meta': {'events': 10}} for _ in range(nbfiles)]
+    replica_client.add_replicas(rse=rse3, files=files)
+    list_rep = [{'scope': file_['scope'], 'name': file_['name'], 'rse': rse3} for file_ in files]
+
+    # Listing replicas on deterministic RSE
+    replicas = []
+    for replica in replica_client.list_replicas(dids=[{'scope': f['scope'], 'name': f['name']} for f in files], schemes=['srm'], all_states=True):
+        replicas.extend(replica['rses'][rse3])
+    r = replica_client.declare_bad_file_replicas(list_rep, 'This is a good reason')
+    assert r == {}
+    bad_replicas = list_bad_replicas()
+    nbbadrep = 0
+    for rep in list_rep:
+        for badrep in bad_replicas:
+            if badrep['rse_id'] == rse3_id:
+                if badrep['scope'].external == rep['scope'] and badrep['name'] == rep['name']:
+                    nbbadrep += 1
+    assert len(replicas) == nbbadrep
+
+    # InvalidType is raised if list_rep contains a mixture of replicas and PFNs
+    list_rep.extend(['srm://%s.cern.ch/test/%s/%s' % (rse2_id, tmp_scope, generate_uuid()), ])
+    with pytest.raises(InvalidType):
+        r = replica_client.declare_bad_file_replicas(list_rep, 'This is a good reason')
 
 
 def test_client_add_suspicious_replicas(rse_factory, replica_client):
