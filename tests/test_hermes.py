@@ -59,16 +59,8 @@ class MyListener:
         {
             "table_content": [
                 ("hermes", "services_list", "influx,activemq,elastic,email"),
-                (
-                    "hermes",
-                    "elastic_endpoint",
-                    "http://localhost:9200/ddm_events/doc/_bulk",
-                ),
-                (
-                    "hermes",
-                    "influxdb_endpoint",
-                    "http://localhost:8086/api/v2/write?org=rucio&bucket=rucio",
-                ),
+                ("hermes", "elastic_endpoint", "http://elasticsearch:9200/ddm_events/doc/_bulk"),
+                ("hermes", "influxdb_endpoint", "http://influxdb:8086/api/v2/write?org=rucio&bucket=rucio"),
                 ("hermes", "influxdb_token", "mytoken"),
                 ("messaging-hermes", "destination", "/queue/events"),
                 ("messaging-hermes", "brokers", "localhost"),
@@ -76,22 +68,16 @@ class MyListener:
                 ("messaging-hermes", "username", "hermes"),
                 ("messaging-hermes", "password", "supersecret"),
                 ("messaging-hermes", "nonssl_port", 61613),
-                ("messaging-hermes", "send_email", False),
+                ("messaging-hermes", "send_email", True),
+                ("messaging-hermes", "smtp_host", "testing.host"),
+                ("messaging-hermes", "smtp_port", 1234),
             ]
         },
         {
             "table_content": [
                 ("hermes", "services_list", "influx,activemq,elastic,email"),
-                (
-                    "hermes",
-                    "elastic_endpoint",
-                    "http://localhost:9200/ddm_events/doc/_bulk",
-                ),
-                (
-                    "hermes",
-                    "influxdb_endpoint",
-                    "http://localhost:8086/api/v2/write?org=rucio&bucket=rucio",
-                ),
+                ("hermes", "elastic_endpoint", "http://elasticsearch:9200/ddm_events/doc/_bulk"),
+                ("hermes", "influxdb_endpoint", "http://influxdb:8086/api/v2/write?org=rucio&bucket=rucio"),
                 ("hermes", "influxdb_token", "mytoken"),
                 ("messaging-hermes", "destination", "/queue/events"),
                 ("messaging-hermes", "brokers", "localhost"),
@@ -99,9 +85,9 @@ class MyListener:
                 ("messaging-hermes", "username", "hermes"),
                 ("messaging-hermes", "password", "supersecret"),
                 ("messaging-hermes", "nonssl_port", 61613),
-                ("messaging-hermes", "send_email", False),
-                ("messaging-hermes", "smtp-host", "testing.host"),
-                ("messaging-hermes", "smtp-port", 1234),
+                ("messaging-hermes", "send_email", True),
+                ("messaging-hermes", "smtp_host", "testing.host"),
+                ("messaging-hermes", "smtp_port", 1234),
             ]
         }
     ],
@@ -205,7 +191,11 @@ def test_hermes(core_config_mock, caches_mock, monkeypatch):
         smtp_mock = MagicMock()
         m.setattr(hermes.smtplib, "SMTP", smtp_mock)
         hermes.hermes(once=True)
-        smtp_mock.assert_called_with(host="testing.host", port=1234)
+        smtp_host = config_get("messaging-hermes", "smtp_host", default='', raise_exception=False)
+        if not smtp_host:
+            smtp_mock.assert_called_with()
+        else:
+            smtp_mock.assert_called_with(host="testing.host", port=1234)
     service_dict = {"influx": 0, "elastic": 0, "email": 0, "activemq": 0}
     messages = retrieve_messages(50, old_mode=False)
     for message in messages:
@@ -247,7 +237,7 @@ def test_hermes(core_config_mock, caches_mock, monkeypatch):
     # Checking influxDB
     assert service_dict["influx"] == 0
     res = requests.get(
-        "http://localhost:8086/query?db=rucio",
+        "http://influxdb:8086/query?db=rucio",
         headers={"Authorization": "Token mytoken"},
         params={"q": "SELECT * FROM deletion"},
     )
@@ -273,7 +263,7 @@ def test_hermes(core_config_mock, caches_mock, monkeypatch):
     data = ' { "query": { "match_all": {} } }'
     headers = {"Content-Type": "application/json"}
     response = requests.post(
-        "http://localhost:9200/_search?size=1000", data=data, headers=headers
+        "http://elasticsearch:9200/_search?size=1000", data=data, headers=headers
     )
     assert response.status_code == 200
     res = response.json()
