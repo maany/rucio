@@ -16,10 +16,12 @@ NC='\033[0m' # No Color
 DIST="alma9"
 PYTHON_VERSION="3.9"
 RDBMS="postgres14"
+SUITE="remote_dbs"
 IMAGE_TAG=""
 COMPOSE_PROJECT=""
 CLEANUP=true
 BUILD_ONLY=false
+TEST_PATH=""
 
 # Function to print colored messages
 print_info() {
@@ -48,17 +50,32 @@ Run Rucio tests locally, replicating the GitHub Action workflow.
 OPTIONS:
     -p, --python VERSION     Python version (3.9 or 3.10, default: 3.9)
     -d, --db DATABASE       Database to use (postgres14 or sqlite, default: postgres14)
-    -t, --tag TAG           Custom image tag (default: auto-generated)
+    -s, --suite SUITE       Test suite to run (remote_dbs, sqlite, client, default: remote_dbs)
+                            Note: sqlite suite requires --db sqlite
+    --tag TAG               Custom image tag (default: auto-generated)
+    -t, --test PATH         Test path to run (default: tests/)
+                            Examples: tests/test_account.py
+                                     tests/test_account.py::test_add_account
+                                     "tests/ -k account"
     -n, --no-cleanup        Don't cleanup containers after tests
     -b, --build-only        Only build the image, don't run tests
     -h, --help              Show this help message
 
 EXAMPLES:
-    # Run with default settings (Python 3.9, PostgreSQL 14)
+    # Run with default settings (Python 3.9, PostgreSQL 14, remote_dbs suite)
     $0
 
-    # Run with Python 3.10 and SQLite
-    $0 --python 3.10 --db sqlite
+    # Run with Python 3.10 and SQLite suite
+    $0 --python 3.10 --db sqlite --suite sqlite
+
+    # Run a single test file
+    $0 --test tests/test_account.py
+
+    # Run a specific test function
+    $0 --test tests/test_account.py::test_add_account
+
+    # Run client suite tests
+    $0 --suite client
 
     # Build image only with custom tag
     $0 --build-only --tag my-test-image:latest
@@ -80,8 +97,16 @@ while [[ $# -gt 0 ]]; do
             RDBMS="$2"
             shift 2
             ;;
-        -t|--tag)
+        -s|--suite)
+            SUITE="$2"
+            shift 2
+            ;;
+        --tag)
             IMAGE_TAG="$2"
+            shift 2
+            ;;
+        -t|--test)
+            TEST_PATH="$2"
             shift 2
             ;;
         -n|--no-cleanup)
@@ -116,6 +141,19 @@ if [[ "$RDBMS" != "postgres14" && "$RDBMS" != "sqlite" ]]; then
     exit 1
 fi
 
+# Validate suite
+if [[ "$SUITE" != "remote_dbs" && "$SUITE" != "sqlite" && "$SUITE" != "client" ]]; then
+    print_error "Invalid suite: $SUITE. Must be remote_dbs, sqlite, or client"
+    exit 1
+fi
+
+# Validate suite and database compatibility
+if [[ "$SUITE" == "sqlite" && "$RDBMS" != "sqlite" ]]; then
+    print_warning "Suite 'sqlite' requires --db sqlite. Auto-setting RDBMS to sqlite."
+    RDBMS="sqlite"
+    export PROFILE="sqlite"
+fi
+
 # Set environment variables
 export COMPOSE_PROJECT="rucio-test-${DIST}"
 export PROFILE="${RDBMS}"
@@ -131,12 +169,19 @@ fi
 
 export RUCIO_TEST_IMAGE="${IMAGE_TAG}"
 
+# Set default test path if not specified
+if [ -z "$TEST_PATH" ]; then
+    TEST_PATH="tests/"
+fi
+
 print_info "Configuration:"
 print_info "  Distribution: ${DIST}"
 print_info "  Python version: ${PYTHON_VERSION}"
 print_info "  Database: ${RDBMS}"
+print_info "  Suite: ${SUITE}"
 print_info "  Image tag: ${IMAGE_TAG}"
 print_info "  Compose project: ${COMPOSE_PROJECT}"
+print_info "  Test path: ${TEST_PATH}"
 
 # Cleanup function
 cleanup() {
@@ -260,12 +305,11 @@ export PYTEST_DISABLE_PLUGIN_AUTOLOAD="True"
 
 docker compose -p "${COMPOSE_PROJECT}" --profile "${PROFILE}" exec rucio bash -c "
     python -m pytest \
-        --suite=remote_dbs \
+        --suite=${SUITE} \
         -r fExX \
         --log-level=DEBUG \
         -v --tb=short \
-        -p xdist --numprocesses=3 \
-        tests/test_utils
+        ${TEST_PATH}
 "
 
 TEST_EXIT_CODE=$?

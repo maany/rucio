@@ -86,6 +86,57 @@ def pytest_configure(config: pytest.Config) -> None:
 
     if suite and suite != "client":
         import os
+        import subprocess
+
+        # Optional cleanup (mainly for local development between test runs)
+        # Can be disabled with RUCIO_TEST_CLEANUP=false environment variable
+        cleanup_enabled = os.environ.get('RUCIO_TEST_CLEANUP', 'true').lower() == 'true'
+
+        if cleanup_enabled and not keep_db:
+            print("[pytest_configure] Cleaning up from previous test runs")
+
+            # Clear memcache (best effort)
+            try:
+                import socket
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                    sock.settimeout(1)
+                    sock.connect(('127.0.0.1', 11211))
+                    sock.sendall(b'flush_all\r\n')
+                print("[pytest_configure] Memcache cleared")
+            except Exception:
+                pass  # Not critical, memcache might not be running
+
+            # Clean authentication tokens
+            import glob
+            for pattern in ['/tmp/.rucio_*']:
+                try:
+                    for path in glob.glob(pattern):
+                        if os.path.isdir(path):
+                            import shutil
+                            shutil.rmtree(path, ignore_errors=True)
+                except Exception:
+                    pass  # Not critical
+
+            # Clean RSE directories
+            try:
+                import shutil
+                rse_dir = '/tmp/rucio_rse'
+                if os.path.exists(rse_dir):
+                    shutil.rmtree(rse_dir, ignore_errors=True)
+                    os.makedirs(rse_dir, exist_ok=True)
+            except Exception:
+                pass  # Not critical
+
+            # Clean .pyc files (best effort)
+            try:
+                subprocess.run(['find', 'lib', '-iname', '*.pyc', '-delete'],
+                             check=False, capture_output=True, timeout=5)
+            except Exception:
+                pass  # Not critical
+
+            print("[pytest_configure] Cleanup completed")
+
+    if suite and suite != "client":
         from alembic import command
         from alembic.config import Config
         from rucio.db.sqla.util import purge_db
@@ -95,23 +146,26 @@ def pytest_configure(config: pytest.Config) -> None:
         if not keep_db:
             print("[pytest_configure] Resetting database tables")
 
-            # Check if we're using SQLite
-            from rucio.db.sqla.session import get_engine
-            engine = get_engine()
-            is_sqlite = 'sqlite' in str(engine.url).lower()
-
-            # Remove old SQLite databases
-            sqlite_paths = ['/tmp/rucio.db']
-            if is_sqlite:
+            # Handle suite-specific database reset
+            if suite == "sqlite":
+                # SQLite suite: Delete the database file
+                print("[pytest_configure] SQLite suite: Deleting database file")
+                sqlite_paths = ['/tmp/rucio.db']
                 for db_path in sqlite_paths:
                     if os.path.exists(db_path):
                         print(f"[pytest_configure] Removing old SQLite database: {db_path}")
-                        os.remove(db_path)
-                print("[pytest_configure] SQLite database file deleted, skipping purge_db()")
-            else:
-                # For PostgreSQL/Oracle, use purge_db to handle schemas
+                        try:
+                            os.remove(db_path)
+                            print(f"[pytest_configure] SQLite database {db_path} deleted successfully")
+                        except Exception as e:
+                            print(f"[pytest_configure] Warning: Could not remove {db_path}: {e}")
+                    else:
+                        print(f"[pytest_configure] SQLite database {db_path} does not exist (will be created fresh)")
+
+            elif suite == "remote_dbs":
+                # remote_dbs suite: Use purge_db for PostgreSQL/Oracle/MySQL
+                print("[pytest_configure] remote_dbs suite: Purging database")
                 try:
-                    print("[pytest_configure] Purging database (dropping tables and PostgreSQL types)")
                     purge_db()
                     print("[pytest_configure] Database purge completed")
                 except Exception as e:
@@ -125,12 +179,30 @@ def pytest_configure(config: pytest.Config) -> None:
                         traceback.print_exc()
                         raise RuntimeError("Failed to purge database") from e
 
-            # Fix SQLite permissions if database exists (after build)
-            if is_sqlite:
-                for db_path in sqlite_paths:
-                    if os.path.exists(db_path):
-                        print(f"[pytest_configure] Setting SQLite database permissions: {db_path}")
-                        os.chmod(db_path, 0o666)
+            else:
+                # Other suites: Try to determine database type
+                print(f"[pytest_configure] {suite} suite: Determining database type")
+                from rucio.db.sqla.session import get_engine
+                engine = get_engine()
+                is_sqlite = 'sqlite' in str(engine.url).lower()
+
+                if is_sqlite:
+                    print("[pytest_configure] Detected SQLite, deleting database file")
+                    sqlite_paths = ['/tmp/rucio.db']
+                    for db_path in sqlite_paths:
+                        if os.path.exists(db_path):
+                            os.remove(db_path)
+                else:
+                    print("[pytest_configure] Detected remote database, purging")
+                    try:
+                        purge_db()
+                        print("[pytest_configure] Database purge completed")
+                    except Exception as e:
+                        error_str = str(e).lower()
+                        if 'does not exist' in error_str or 'invalidschemaname' in error_str:
+                            print(f"[pytest_configure] Schema doesn't exist, skipping purge")
+                        else:
+                            raise
 
         # Build the database schema and tables
         try:
@@ -145,6 +217,15 @@ def pytest_configure(config: pytest.Config) -> None:
             create_base_vo()
             create_root_account()
             print("[pytest_configure] Base VO and root account created")
+
+            # Fix SQLite permissions after database is created
+            if suite == "sqlite":
+                sqlite_paths = ['/tmp/rucio.db']
+                for db_path in sqlite_paths:
+                    if os.path.exists(db_path):
+                        print(f"[pytest_configure] Setting SQLite database permissions: {db_path}")
+                        os.chmod(db_path, 0o666)
+
         except Exception as e:
             print(f"[pytest_configure] Database build failed: {e}")
             import traceback
@@ -169,12 +250,39 @@ def pytest_configure(config: pytest.Config) -> None:
         try:
             print("[pytest_configure] Bootstrapping test data (root account, etc.)")
             _run_bootstrap_tests()
-            print("[pytest_configure] Test data bootstrap completed\n")
+            print("[pytest_configure] Test data bootstrap completed")
         except Exception as e:
             print(f"[pytest_configure] Bootstrap failed: {e}")
             import traceback
             traceback.print_exc()
             raise RuntimeError("Failed to bootstrap test data") from e
+
+        # Sync RSE repository before test collection
+        # Tests may expect RSEs to exist when they import modules
+        try:
+            print("[pytest_configure] Syncing RSE repository")
+            if suite == "special" and os.path.exists('etc/rse_repository.json.special'):
+                _run_sync_rses(['etc/rse_repository.json.special'])
+            else:
+                _run_sync_rses([])
+            print("[pytest_configure] RSE repository sync completed")
+        except Exception as e:
+            print(f"[pytest_configure] RSE sync failed: {e}")
+            import traceback
+            traceback.print_exc()
+            raise RuntimeError("Failed to sync RSE repository") from e
+
+        # Sync metadata keys before test collection
+        # Tests may expect metadata keys to exist when they import modules
+        try:
+            print("[pytest_configure] Syncing metadata keys")
+            _run_sync_meta()
+            print("[pytest_configure] Metadata sync completed\n")
+        except Exception as e:
+            print(f"[pytest_configure] Metadata sync failed: {e}")
+            import traceback
+            traceback.print_exc()
+            raise RuntimeError("Failed to sync metadata") from e
 
 
 def pytest_runtest_setup(item: pytest.Item) -> None:
@@ -1057,48 +1165,23 @@ def rucio_bootstrap(request: pytest.FixtureRequest, database_setup, test_environ
     
     print("[rucio_bootstrap] Server suite: full bootstrap")
 
-    # httpd restart and bootstrap are already done in pytest_configure
-    print("[rucio_bootstrap] httpd and test data already initialized in pytest_configure")
-    
-    # Sync RSE repository - execute sync logic directly
-    try:
-        print("Syncing RSE repository")
-        if suite == "special" and os.path.exists('etc/rse_repository.json.special'):
-            _run_sync_rses(['etc/rse_repository.json.special'])
-        else:
-            _run_sync_rses([])
-        print("RSE repository sync completed")
-    except Exception as e:
-        print(f"RSE sync failed: {e}")
-        import traceback
-        traceback.print_exc()
-        pytest.fail("Failed to sync RSE repository")
-    
-    # Sync metadata keys - execute sync logic directly
-    try:
-        print("Syncing metadata keys")
-        _run_sync_meta()
-        print("Metadata sync completed")
-    except Exception as e:
-        print(f"Metadata sync failed: {e}")
-        import traceback
-        traceback.print_exc()
-        pytest.fail("Failed to sync metadata")
-    
-    # Activate RSEs if requested
+    # All initialization (httpd restart, bootstrap, RSE sync, metadata sync) is already done in pytest_configure
+    print("[rucio_bootstrap] All initialization already completed in pytest_configure")
+
+    # Activate RSEs if requested (this is optional and only done via CLI flag)
     if activate_rses:
-        print("Activating default RSEs (XRD1, XRD2, XRD3, SSH1)")
+        print("[rucio_bootstrap] Activating default RSEs (XRD1, XRD2, XRD3, SSH1)")
         try:
-            result = subprocess.run(['tools/docker_activate_rses.sh'], 
+            result = subprocess.run(['tools/docker_activate_rses.sh'],
                                   check=True, capture_output=True, text=True)
-            print("RSE activation completed")
+            print("[rucio_bootstrap] RSE activation completed")
         except subprocess.CalledProcessError as e:
-            print(f"RSE activation failed: {e}")
+            print(f"[rucio_bootstrap] RSE activation failed: {e}")
             print(f"stdout: {e.stdout}")
             print(f"stderr: {e.stderr}")
             pytest.fail("Failed to activate RSEs")
         except FileNotFoundError:
-            print("Warning: docker_activate_rses.sh not found, skipping RSE activation")
+            print("[rucio_bootstrap] Warning: docker_activate_rses.sh not found, skipping RSE activation")
 
 
 def _run_bootstrap_tests() -> None:
