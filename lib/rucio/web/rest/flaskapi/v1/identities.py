@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from flask import Flask, jsonify, request
+from flask import Flask, Response, jsonify, request
 
 from rucio.common.constants import HTTPMethod
 from rucio.gateway.identity import add_account_identity, add_identity, list_accounts_for_identity
@@ -267,7 +267,7 @@ class AccountsByIdentity(ErrorHandlingMethodView):
     """ Retrieve list of accounts mapped to an identity using query parameters. """
 
     @check_accept_header_wrapper_flask(['application/json'])
-    def get(self):
+    def get(self) -> Response:
         """
         ---
         summary: List accounts by identity
