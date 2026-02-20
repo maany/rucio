@@ -50,17 +50,16 @@ if TYPE_CHECKING:
 _del_test_prefix = functools.partial(re.compile(r'^[Tt][Ee][Ss][Tt]_?').sub, '')
 # local imports in the fixtures to make this file loadable in e.g. client tests
 
-pytest_plugins = ('tests.ruciopytest.artifacts_plugin', )
+pytest_plugins = (
+    'tests.ruciopytest.artifacts_plugin',
+    'tests.ruciopytest.plugin',
+)
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
-    parser.addoption("--suite", 
-                     choices=["client", "remote_dbs", "sqlite", "multi_vo", "votest"], 
-                     default="remote_dbs",
-                     help="Test suite to run (matches existing SUITE env var)")
-    parser.addoption("--activate-rses", action="store_true", 
+    parser.addoption("--activate-rses", action="store_true",
                      help="Activate default RSEs (XRD1, XRD2, XRD3, SSH1)")
-    parser.addoption("--keep-db", action="store_true", 
+    parser.addoption("--keep-db", action="store_true",
                      help="Keep database from previous run")
 
 
@@ -81,7 +80,11 @@ def pytest_configure(config: pytest.Config) -> None:
         config.pluginmanager.register(xdist_noparallel_scheduler)
 
     # Initialize database before test collection to avoid import-time database connection failures
-    suite = config.getoption("--suite", default=None)
+    # Read suite from plugin's stash (set by tests.ruciopytest.plugin.pytest_configure)
+    # Fall back to getoption for backward compatibility if plugin hasn't resolved a profile
+    from .ruciopytest.plugin import suite_profile_key
+    profile = config.stash.get(suite_profile_key, None)
+    suite = profile.name if profile else config.getoption("suite", default=None)
     keep_db = config.getoption("--keep-db", default=False)
 
     if suite and suite != "client":
@@ -1063,11 +1066,15 @@ def test_environment_setup(request: pytest.FixtureRequest) -> None:
     import tempfile
     from pathlib import Path
     
-    suite = request.config.getoption("--suite")
-    
+    suite = request.config.getoption("suite", default=None)
+    if suite is None:
+        # Plugin dormant: no --suite provided, skip environment setup
+        return
+
     # Set SUITE environment variable for compatibility with existing code
+    # (also set by the plugin, but ensure it's available in fixtures too)
     os.environ['SUITE'] = suite
-    
+
     if suite == "client":
         # Client-only tests need minimal setup
         return
@@ -1126,9 +1133,9 @@ def database_setup(request: pytest.FixtureRequest, test_environment_setup) -> No
     to ensure it happens before test collection.
     This fixture now only serves as a dependency marker for other fixtures.
     """
-    suite = request.config.getoption("--suite")
+    suite = request.config.getoption("suite", default=None)
 
-    if suite == "client":
+    if suite is None or suite == "client":
         pytest.skip("Client tests don't need database setup")
 
     # Database is already initialized in pytest_configure
@@ -1147,7 +1154,7 @@ def rucio_bootstrap(request: pytest.FixtureRequest, database_setup, test_environ
     import time
     from pathlib import Path
     
-    suite = request.config.getoption("--suite")
+    suite = request.config.getoption("suite", default=None)
     activate_rses = request.config.getoption("--activate-rses")
     
     if suite == "client":

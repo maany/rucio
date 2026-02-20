@@ -92,15 +92,34 @@ def _print_profile_summary(config: pytest.Config, profile: SuiteProfile) -> None
     else:
         workers = 0
 
-    tw = config.get_terminal_writer()
-    tw.line()
-    tw.sep("=", "Rucio Test Suite Configuration")
-    tw.line(f"  Suite:          {profile.name}")
-    tw.line(f"  RDBMS:          {profile.rdbms}")
-    tw.line(f"  xdist enabled:  {profile.xdist_enabled}")
-    tw.line(f"  Workers:        {workers}")
-    tw.line(f"  Test paths:     {', '.join(profile.test_paths)}")
-    if profile.env_vars:
-        tw.line(f"  Env vars:       {profile.env_vars}")
-    tw.sep("=")
-    tw.line()
+    # Terminal reporter may not be registered yet during early pytest_configure.
+    # Use pluginmanager to check; fall back to plain print if unavailable.
+    terminalreporter = config.pluginmanager.get_plugin("terminalreporter")
+    if terminalreporter is not None:
+        tw = terminalreporter._tw
+        tw.line()
+        tw.sep("=", "Rucio Test Suite Configuration")
+        tw.line(f"  Suite:          {profile.name}")
+        tw.line(f"  RDBMS:          {profile.rdbms}")
+        tw.line(f"  xdist enabled:  {profile.xdist_enabled}")
+        tw.line(f"  Workers:        {workers}")
+        tw.line(f"  Test paths:     {', '.join(profile.test_paths)}")
+        if profile.env_vars:
+            tw.line(f"  Env vars:       {profile.env_vars}")
+        tw.sep("=")
+        tw.line()
+    else:
+        # Fallback: plain print when terminal writer is not yet available
+        print()
+        print("=" * 60)
+        print("  Rucio Test Suite Configuration")
+        print("=" * 60)
+        print(f"  Suite:          {profile.name}")
+        print(f"  RDBMS:          {profile.rdbms}")
+        print(f"  xdist enabled:  {profile.xdist_enabled}")
+        print(f"  Workers:        {workers}")
+        print(f"  Test paths:     {', '.join(profile.test_paths)}")
+        if profile.env_vars:
+            print(f"  Env vars:       {profile.env_vars}")
+        print("=" * 60)
+        print()
