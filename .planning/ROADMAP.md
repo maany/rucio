@@ -12,7 +12,7 @@ This roadmap transforms Rucio's 6-script CI test chain into a single `pytest --s
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Plugin Skeleton and Suite Profiles** - In-repo plugin with CLI options, suite profile registry, and xdist configuration
+- [x] **Phase 1: Plugin Skeleton and Suite Profiles** - In-repo plugin with CLI options, suite profile registry, and xdist configuration (completed 2026-02-20)
 - [ ] **Phase 2: Database Lifecycle and Bootstrap** - DB purge/build/seed, httpd restart, memcache flush, and bootstrap data extracted into InfraManager
 - [ ] **Phase 3: Container Lifecycle and Cleanup** - Docker compose orchestration with readiness checks, signal handlers, orphan cleanup, and log capture
 - [ ] **Phase 4: Test Collection and Parallelism Integration** - Suite-based test filtering, independent infra override, and NoParallelScheduler wiring
@@ -104,7 +104,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Plugin Skeleton and Suite Profiles | 0/2 | Not started | - |
+| 1. Plugin Skeleton and Suite Profiles | 0/2 | Complete    | 2026-02-20 |
 | 2. Database Lifecycle and Bootstrap | 0/2 | Not started | - |
 | 3. Container Lifecycle and Cleanup | 0/2 | Not started | - |
 | 4. Test Collection and Parallelism Integration | 0/1 | Not started | - |
