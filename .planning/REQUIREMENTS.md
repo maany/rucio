@@ -16,7 +16,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [ ] **CONT-05**: Plugin registers signal handlers (SIGTERM, SIGINT) to clean up containers on interruption
 - [ ] **CONT-06**: Plugin detects and removes orphaned containers from previous failed runs at startup
 - [ ] **CONT-07**: Plugin captures container logs (httpd, DB) and attaches them to test report on failure
-- [ ] **CONT-08**: Plugin flushes memcache before test session starts
+- [x] **CONT-08**: Plugin flushes memcache before test session starts
 
 ### Suite & Test Selection
 
@@ -29,11 +29,11 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Database & Bootstrap
 
-- [ ] **DBBS-01**: Plugin purges and rebuilds database schema when starting a test session (unless `--keep-db`)
-- [ ] **DBBS-02**: Plugin creates root account and base VO after schema build
-- [ ] **DBBS-03**: Plugin restarts httpd gracefully after database rebuild
-- [ ] **DBBS-04**: Plugin bootstraps test data (accounts, scopes, RSEs, metadata keys)
-- [ ] **DBBS-05**: Plugin handles SQLite (file delete), PostgreSQL, MySQL, and Oracle database lifecycle
+- [x] **DBBS-01**: Plugin purges and rebuilds database schema when starting a test session (unless `--keep-db`)
+- [x] **DBBS-02**: Plugin creates root account and base VO after schema build
+- [x] **DBBS-03**: Plugin restarts httpd gracefully after database rebuild
+- [x] **DBBS-04**: Plugin bootstraps test data (accounts, scopes, RSEs, metadata keys)
+- [x] **DBBS-05**: Plugin handles SQLite (file delete), PostgreSQL, MySQL, and Oracle database lifecycle
 
 ### Parallelism
 
@@ -97,18 +97,18 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CONT-05 | Phase 3 | Pending |
 | CONT-06 | Phase 3 | Pending |
 | CONT-07 | Phase 3 | Pending |
-| CONT-08 | Phase 2 | Pending |
+| CONT-08 | Phase 2 | Complete |
 | SUIT-01 | Phase 1 | Complete |
 | SUIT-02 | Phase 1 | Complete |
 | SUIT-03 | Phase 4 | Pending |
 | SUIT-04 | Phase 4 | Pending |
 | SUIT-05 | Phase 3 | Pending |
 | SUIT-06 | Phase 2 | Pending |
-| DBBS-01 | Phase 2 | Pending |
-| DBBS-02 | Phase 2 | Pending |
-| DBBS-03 | Phase 2 | Pending |
-| DBBS-04 | Phase 2 | Pending |
-| DBBS-05 | Phase 2 | Pending |
+| DBBS-01 | Phase 2 | Complete |
+| DBBS-02 | Phase 2 | Complete |
+| DBBS-03 | Phase 2 | Complete |
+| DBBS-04 | Phase 2 | Complete |
+| DBBS-05 | Phase 2 | Complete |
 | PARA-01 | Phase 4 | Pending |
 | PARA-02 | Phase 1 | Complete |
 | PARA-03 | Phase 1 | Complete |
