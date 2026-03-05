@@ -255,7 +255,7 @@ class InfraManager:
             print("[infra_manager] Apache httpd restarted")
             time.sleep(2)
         except subprocess.CalledProcessError as e:
-            print(f"[infra_manager] Warning: Could not restart Apache: {e}")
+            raise RuntimeError("Failed to restart httpd") from e
         except FileNotFoundError:
             print("[infra_manager] Warning: httpd not found, skipping Apache restart")
 
