@@ -43,6 +43,12 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         help="Test suite to run",
     )
     group.addoption(
+        "--keep-db",
+        action="store_true",
+        default=False,
+        help="Keep database from previous run (skip purge/rebuild/seed)",
+    )
+    group.addoption(
         "--xdist-workers",
         type=int,
         default=None,
@@ -78,6 +84,13 @@ def pytest_configure(config: pytest.Config) -> None:
     if not is_worker:
         configure_xdist(config, profile)
         _print_profile_summary(config, profile)
+
+        # Database lifecycle (Phase 2)
+        if profile.name != "client":
+            keep_db = config.getoption("--keep-db", default=False)
+            from .infra_manager import InfraManager
+            manager = InfraManager(profile, keep_db=keep_db)
+            manager.setup()
 
 
 # ---------------------------------------------------------------------------
