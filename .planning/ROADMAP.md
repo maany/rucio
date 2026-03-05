@@ -13,7 +13,7 @@ This roadmap transforms Rucio's 6-script CI test chain into a single `pytest --s
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Plugin Skeleton and Suite Profiles** - In-repo plugin with CLI options, suite profile registry, and xdist configuration (completed 2026-02-20)
-- [ ] **Phase 2: Database Lifecycle and Bootstrap** - DB purge/build/seed, httpd restart, memcache flush, and bootstrap data extracted into InfraManager
+- [x] **Phase 2: Database Lifecycle and Bootstrap** - DB purge/build/seed, httpd restart, memcache flush, and bootstrap data extracted into InfraManager (completed 2026-03-05)
 - [ ] **Phase 3: Container Lifecycle and Cleanup** - Docker compose orchestration with readiness checks, signal handlers, orphan cleanup, and log capture
 - [ ] **Phase 4: Test Collection and Parallelism Integration** - Suite-based test filtering, independent infra override, and NoParallelScheduler wiring
 - [ ] **Phase 5: CI Workflow and Migration** - simple-autotest.yml using pytest directly, conftest.py refactored to fixtures only, lint workflow separated
@@ -49,8 +49,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 02-01-PLAN.md — Create InfraManager class with full DB lifecycle methods (purge, build, seed, memcache flush, httpd restart, bootstrap data, RSE sync, metadata sync)
-- [ ] 02-02-PLAN.md — Wire InfraManager into plugin.py, register --keep-db option, remove DB lifecycle code from conftest.py
+- [x] 02-01-PLAN.md — Create InfraManager class with full DB lifecycle methods (purge, build, seed, memcache flush, httpd restart, bootstrap data, RSE sync, metadata sync)
+- [x] 02-02-PLAN.md — Wire InfraManager into plugin.py, register --keep-db option, remove DB lifecycle code from conftest.py
 
 ### Phase 3: Container Lifecycle and Cleanup
 **Goal**: Plugin manages full Docker container lifecycle (up, readiness, down) with belt-and-suspenders cleanup ensuring no orphaned containers survive failed runs
@@ -105,7 +105,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Plugin Skeleton and Suite Profiles | 2/2 | Complete    | 2026-02-20 |
-| 2. Database Lifecycle and Bootstrap | 0/2 | Not started | - |
+| 2. Database Lifecycle and Bootstrap | 2/2 | Complete    | 2026-03-05 |
 | 3. Container Lifecycle and Cleanup | 0/2 | Not started | - |
 | 4. Test Collection and Parallelism Integration | 0/1 | Not started | - |
 | 5. CI Workflow and Migration | 0/2 | Not started | - |

@@ -25,7 +25,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [ ] **SUIT-03**: User can override infrastructure independently via `--infra=postgres14,httpd` without passing `--suite`
 - [ ] **SUIT-04**: Plugin filters test collection based on suite profile (include/exclude by path and marker)
 - [ ] **SUIT-05**: Each test run uses a unique compose project name (`rucio-test-{suite}-{rdbms}`) to avoid collisions
-- [ ] **SUIT-06**: User can pass `--keep-db` to skip database rebuild on subsequent runs
+- [x] **SUIT-06**: User can pass `--keep-db` to skip database rebuild on subsequent runs
 
 ### Database & Bootstrap
 
@@ -103,7 +103,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SUIT-03 | Phase 4 | Pending |
 | SUIT-04 | Phase 4 | Pending |
 | SUIT-05 | Phase 3 | Pending |
-| SUIT-06 | Phase 2 | Pending |
+| SUIT-06 | Phase 2 | Complete |
 | DBBS-01 | Phase 2 | Complete |
 | DBBS-02 | Phase 2 | Complete |
 | DBBS-03 | Phase 2 | Complete |
