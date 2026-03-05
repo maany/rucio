@@ -33,8 +33,8 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 2 plans
 
 Plans:
-- [ ] 01-01-PLAN.md — Create plugin modules (profiles.py, xdist_config.py, plugin.py) with suite profile dataclass, xdist auto-config, and plugin hooks
-- [ ] 01-02-PLAN.md — Wire plugin into conftest.py, migrate --suite option, validate end-to-end activation
+- [x] 01-01-PLAN.md — Create plugin modules (profiles.py, xdist_config.py, plugin.py) with suite profile dataclass, xdist auto-config, and plugin hooks
+- [x] 01-02-PLAN.md — Wire plugin into conftest.py, migrate --suite option, validate end-to-end activation
 
 ### Phase 2: Database Lifecycle and Bootstrap
 **Goal**: InfraManager handles complete database lifecycle (purge, schema build, seed) and bootstrap data creation, extracted from the existing conftest.py into a testable module
@@ -46,11 +46,11 @@ Plans:
   3. Running `pytest --suite=sqlite` deletes the SQLite file and rebuilds from scratch (SQLite-specific lifecycle)
   4. Memcache is flushed before test session starts when the suite profile includes memcache
   5. httpd is restarted gracefully after database rebuild completes
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 02-01: TBD
-- [ ] 02-02: TBD
+- [ ] 02-01-PLAN.md — Create InfraManager class with full DB lifecycle methods (purge, build, seed, memcache flush, httpd restart, bootstrap data, RSE sync, metadata sync)
+- [ ] 02-02-PLAN.md — Wire InfraManager into plugin.py, register --keep-db option, remove DB lifecycle code from conftest.py
 
 ### Phase 3: Container Lifecycle and Cleanup
 **Goal**: Plugin manages full Docker container lifecycle (up, readiness, down) with belt-and-suspenders cleanup ensuring no orphaned containers survive failed runs
@@ -104,7 +104,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Plugin Skeleton and Suite Profiles | 0/2 | Complete    | 2026-02-20 |
+| 1. Plugin Skeleton and Suite Profiles | 2/2 | Complete    | 2026-02-20 |
 | 2. Database Lifecycle and Bootstrap | 0/2 | Not started | - |
 | 3. Container Lifecycle and Cleanup | 0/2 | Not started | - |
 | 4. Test Collection and Parallelism Integration | 0/1 | Not started | - |
