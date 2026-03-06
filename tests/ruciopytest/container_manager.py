@@ -34,6 +34,7 @@ import json
 import os
 import signal
 import subprocess
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -86,6 +87,11 @@ class ContainerManager:
     def project_name(self) -> str:
         """The compose project name."""
         return self._project_name
+
+    @property
+    def log_dir(self) -> Path:
+        """Path to the container log output directory."""
+        return Path(self._root_dir) / self.LOG_DIR
 
     def start(self) -> None:
         """Start containers: clean orphans, compose up, readiness check."""
@@ -257,8 +263,61 @@ class ContainerManager:
             print("[container_manager] Warning: docker not found during cleanup")
 
     def _capture_logs(self) -> None:
-        """Capture container logs (stub -- Plan 02 implements full capture)."""
-        pass
+        """Capture container logs to .test-logs/ directory.
+
+        Saves a combined log file (all services) and individual per-service
+        log files.  All errors are handled gracefully -- log capture must
+        never prevent cleanup.
+        """
+        log_dir = self.log_dir
+        try:
+            log_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            print(f"[container_manager] Warning: could not create log directory: {exc}")
+            return
+
+        # Combined log from all services
+        try:
+            result = subprocess.run(
+                self._compose_cmd("logs", "--no-color", "--timestamps"),
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+            combined_log = log_dir / f"{self._project_name}.log"
+            combined_log.write_text(result.stdout)
+            print(f"[container_manager] Combined logs saved to {combined_log}")
+        except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as exc:
+            print(f"[container_manager] Warning: failed to capture combined logs: {exc}")
+
+        # Per-service logs
+        try:
+            svc_result = subprocess.run(
+                self._compose_cmd("config", "--services"),
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            services = [s.strip() for s in svc_result.stdout.splitlines() if s.strip()]
+        except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as exc:
+            print(f"[container_manager] Warning: could not list services: {exc}")
+            return
+
+        for service in services:
+            try:
+                result = subprocess.run(
+                    self._compose_cmd("logs", "--no-color", "--timestamps", service),
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                )
+                if result.stdout:
+                    service_log = log_dir / f"{service}.log"
+                    service_log.write_text(result.stdout)
+            except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as exc:
+                print(f"[container_manager] Warning: failed to capture logs for {service}: {exc}")
+
+        print(f"[container_manager] Per-service logs saved to {log_dir}")
 
     # ------------------------------------------------------------------
     # Cleanup handlers
