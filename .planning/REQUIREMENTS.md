@@ -15,7 +15,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **CONT-04**: Plugin registers atexit handlers to clean up containers on normal Python exit
 - [x] **CONT-05**: Plugin registers signal handlers (SIGTERM, SIGINT) to clean up containers on interruption
 - [x] **CONT-06**: Plugin detects and removes orphaned containers from previous failed runs at startup
-- [ ] **CONT-07**: Plugin captures container logs (httpd, DB) and attaches them to test report on failure
+- [x] **CONT-07**: Plugin captures container logs (httpd, DB) and attaches them to test report on failure
 - [x] **CONT-08**: Plugin flushes memcache before test session starts
 
 ### Suite & Test Selection
@@ -96,7 +96,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CONT-04 | Phase 3 | Complete |
 | CONT-05 | Phase 3 | Complete |
 | CONT-06 | Phase 3 | Complete |
-| CONT-07 | Phase 3 | Pending |
+| CONT-07 | Phase 3 | Complete |
 | CONT-08 | Phase 2 | Complete |
 | SUIT-01 | Phase 1 | Complete |
 | SUIT-02 | Phase 1 | Complete |
