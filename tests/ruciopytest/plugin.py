@@ -106,6 +106,40 @@ def pytest_configure(config: pytest.Config) -> None:
             manager.setup()
 
 
+def pytest_terminal_summary(terminalreporter, exitstatus, config):
+    """Print container log file locations and add to JUnit XML."""
+    cm = config.stash.get(container_manager_key, None)
+    if cm is None:
+        return
+
+    log_dir = cm.log_dir
+    if not log_dir.exists():
+        return
+
+    log_files = sorted(log_dir.glob("*.log"))
+    if not log_files:
+        return
+
+    # Print log file locations in terminal
+    terminalreporter.write_sep("=", "Container Logs")
+    for log_file in log_files:
+        terminalreporter.write_line(f"  {log_file}", yellow=True)
+    terminalreporter.write_sep("=")
+
+    # Add to JUnit XML if --junitxml was specified
+    xml_plugin = config.pluginmanager.get_plugin("junitxml")
+    if xml_plugin is not None:
+        try:
+            for log_file in log_files:
+                xml_plugin.add_global_property(
+                    f"container_log:{log_file.name}",
+                    str(log_file)
+                )
+        except (AttributeError, TypeError):
+            # Fallback: junitxml API may vary across pytest versions
+            pass
+
+
 def pytest_unconfigure(config: pytest.Config) -> None:
     """Stop containers on session end."""
     cm = config.stash.get(container_manager_key, None)
