@@ -26,6 +26,7 @@ from .xdist_config import configure_xdist
 # ---------------------------------------------------------------------------
 
 suite_profile_key = pytest.StashKey[SuiteProfile]()
+container_manager_key = pytest.StashKey["ContainerManager"]()
 
 
 # ---------------------------------------------------------------------------
@@ -85,12 +86,31 @@ def pytest_configure(config: pytest.Config) -> None:
         configure_xdist(config, profile)
         _print_profile_summary(config, profile)
 
+        # Container lifecycle (Phase 3) -- host-side only
+        _in_container = os.path.exists("/.dockerenv") or os.environ.get("RUCIO_SOURCE_DIR")
+        if _in_container:
+            print("[plugin] Running inside container, skipping Docker Compose lifecycle")
+        elif profile.compose_profiles:
+            from .container_manager import ContainerManager
+
+            project_name = ContainerManager.make_project_name(profile.name, profile.rdbms)
+            cm = ContainerManager(project_name, profile.compose_profiles, str(config.rootdir))
+            cm.start()
+            config.stash[container_manager_key] = cm
+
         # Database lifecycle (Phase 2)
         if profile.name != "client":
             keep_db = config.getoption("--keep-db", default=False)
             from .infra_manager import InfraManager
             manager = InfraManager(profile, keep_db=keep_db)
             manager.setup()
+
+
+def pytest_unconfigure(config: pytest.Config) -> None:
+    """Stop containers on session end."""
+    cm = config.stash.get(container_manager_key, None)
+    if cm is not None:
+        cm.stop(capture_logs=True)
 
 
 # ---------------------------------------------------------------------------
