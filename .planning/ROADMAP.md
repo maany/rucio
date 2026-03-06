@@ -62,11 +62,11 @@ Plans:
   3. If pytest is interrupted with SIGTERM or SIGINT, containers are still cleaned up
   4. If a previous run left orphaned containers (matching the compose project name pattern), they are detected and removed at startup before new containers start
   5. When tests fail, container logs (httpd, DB) are captured and available in the test report
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 03-01: TBD
-- [ ] 03-02: TBD
+- [ ] 03-01-PLAN.md — Create ContainerManager class with compose lifecycle (up/down/readiness), orphan cleanup, and belt-and-suspenders cleanup handlers; wire into plugin.py
+- [ ] 03-02-PLAN.md — Implement log capture in ContainerManager and add pytest_terminal_summary hook for log visibility and JUnit XML integration
 
 ### Phase 4: Test Collection and Parallelism Integration
 **Goal**: Plugin filters test collection based on suite profile and integrates with existing NoParallelScheduler for conflict-free parallel execution
