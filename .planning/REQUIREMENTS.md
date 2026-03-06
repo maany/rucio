@@ -9,12 +9,12 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Container Management
 
-- [ ] **CONT-01**: Plugin starts required Docker containers via `docker compose` when pytest session begins
-- [ ] **CONT-02**: Plugin stops and removes containers via `docker compose down` when pytest session ends
-- [ ] **CONT-03**: Plugin performs readiness checks with retries and configurable timeout before proceeding to tests
-- [ ] **CONT-04**: Plugin registers atexit handlers to clean up containers on normal Python exit
-- [ ] **CONT-05**: Plugin registers signal handlers (SIGTERM, SIGINT) to clean up containers on interruption
-- [ ] **CONT-06**: Plugin detects and removes orphaned containers from previous failed runs at startup
+- [x] **CONT-01**: Plugin starts required Docker containers via `docker compose` when pytest session begins
+- [x] **CONT-02**: Plugin stops and removes containers via `docker compose down` when pytest session ends
+- [x] **CONT-03**: Plugin performs readiness checks with retries and configurable timeout before proceeding to tests
+- [x] **CONT-04**: Plugin registers atexit handlers to clean up containers on normal Python exit
+- [x] **CONT-05**: Plugin registers signal handlers (SIGTERM, SIGINT) to clean up containers on interruption
+- [x] **CONT-06**: Plugin detects and removes orphaned containers from previous failed runs at startup
 - [ ] **CONT-07**: Plugin captures container logs (httpd, DB) and attaches them to test report on failure
 - [x] **CONT-08**: Plugin flushes memcache before test session starts
 
@@ -24,7 +24,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **SUIT-02**: Each suite maps to a declarative profile specifying compose profiles, services, xdist settings, and test paths/markers
 - [ ] **SUIT-03**: User can override infrastructure independently via `--infra=postgres14,httpd` without passing `--suite`
 - [ ] **SUIT-04**: Plugin filters test collection based on suite profile (include/exclude by path and marker)
-- [ ] **SUIT-05**: Each test run uses a unique compose project name (`rucio-test-{suite}-{rdbms}`) to avoid collisions
+- [x] **SUIT-05**: Each test run uses a unique compose project name (`rucio-test-{suite}-{rdbms}`) to avoid collisions
 - [x] **SUIT-06**: User can pass `--keep-db` to skip database rebuild on subsequent runs
 
 ### Database & Bootstrap
@@ -54,7 +54,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 - [x] **PLUG-01**: Plugin lives in-repo at `tests/ruciopytest/` as a package
 - [x] **PLUG-02**: Plugin uses zero new pip dependencies (subprocess, stdlib, existing pytest hooks only)
-- [ ] **PLUG-03**: Plugin reuses existing docker-compose files in `etc/docker/dev/`
+- [x] **PLUG-03**: Plugin reuses existing docker-compose files in `etc/docker/dev/`
 
 ## v2 Requirements
 
@@ -90,19 +90,19 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CONT-01 | Phase 3 | Pending |
-| CONT-02 | Phase 3 | Pending |
-| CONT-03 | Phase 3 | Pending |
-| CONT-04 | Phase 3 | Pending |
-| CONT-05 | Phase 3 | Pending |
-| CONT-06 | Phase 3 | Pending |
+| CONT-01 | Phase 3 | Complete |
+| CONT-02 | Phase 3 | Complete |
+| CONT-03 | Phase 3 | Complete |
+| CONT-04 | Phase 3 | Complete |
+| CONT-05 | Phase 3 | Complete |
+| CONT-06 | Phase 3 | Complete |
 | CONT-07 | Phase 3 | Pending |
 | CONT-08 | Phase 2 | Complete |
 | SUIT-01 | Phase 1 | Complete |
 | SUIT-02 | Phase 1 | Complete |
 | SUIT-03 | Phase 4 | Pending |
 | SUIT-04 | Phase 4 | Pending |
-| SUIT-05 | Phase 3 | Pending |
+| SUIT-05 | Phase 3 | Complete |
 | SUIT-06 | Phase 2 | Complete |
 | DBBS-01 | Phase 2 | Complete |
 | DBBS-02 | Phase 2 | Complete |
@@ -120,7 +120,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CICD-04 | Phase 5 | Pending |
 | PLUG-01 | Phase 1 | Complete |
 | PLUG-02 | Phase 1 | Complete |
-| PLUG-03 | Phase 1 | Pending |
+| PLUG-03 | Phase 1 | Complete |
 
 **Coverage:**
 - v1 requirements: 31 total
