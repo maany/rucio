@@ -84,7 +84,7 @@ SUITE_PROFILES: dict[str, SuiteProfile] = {
     "client": SuiteProfile(
         name="client",
         rdbms="postgres14",
-        compose_profiles=("client",),
+        compose_profiles=(),
         xdist_enabled=True,
         default_workers_ci=3,
         default_workers_local="auto",
