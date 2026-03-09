@@ -62,11 +62,12 @@ Plans:
   3. If pytest is interrupted with SIGTERM or SIGINT, containers are still cleaned up
   4. If a previous run left orphaned containers (matching the compose project name pattern), they are detected and removed at startup before new containers start
   5. When tests fail, container logs (httpd, DB) are captured and available in the test report
-**Plans**: 2 plans
+**Plans**: 3 plans
 
 Plans:
-- [ ] 03-01-PLAN.md — Create ContainerManager class with compose lifecycle (up/down/readiness), orphan cleanup, and belt-and-suspenders cleanup handlers; wire into plugin.py
-- [ ] 03-02-PLAN.md — Implement log capture in ContainerManager and add pytest_terminal_summary hook for log visibility and JUnit XML integration
+- [x] 03-01-PLAN.md — Create ContainerManager class with compose lifecycle (up/down/readiness), orphan cleanup, and belt-and-suspenders cleanup handlers; wire into plugin.py
+- [x] 03-02-PLAN.md — Implement log capture in ContainerManager and add pytest_terminal_summary hook for log visibility and JUnit XML integration
+- [ ] 03-03-PLAN.md — Fix signal handler timing, same-name orphan cleanup, and client suite container skip (UAT gap closure)
 
 ### Phase 4: Test Collection and Parallelism Integration
 **Goal**: Plugin filters test collection based on suite profile and integrates with existing NoParallelScheduler for conflict-free parallel execution
@@ -106,6 +107,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 |-------|----------------|--------|-----------|
 | 1. Plugin Skeleton and Suite Profiles | 2/2 | Complete    | 2026-02-20 |
 | 2. Database Lifecycle and Bootstrap | 2/2 | Complete    | 2026-03-05 |
-| 3. Container Lifecycle and Cleanup | 0/2 | Not started | - |
+| 3. Container Lifecycle and Cleanup | 2/3 | In progress | - |
 | 4. Test Collection and Parallelism Integration | 0/1 | Not started | - |
 | 5. CI Workflow and Migration | 0/2 | Not started | - |
