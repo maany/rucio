@@ -64,6 +64,7 @@ class ContainerManager:
     )
     PROJECT_PREFIX = "rucio-test-"
     LOG_DIR = ".test-logs"
+    TEST_DOCKERFILE = "etc/docker/test/runtime.Dockerfile"
 
     def __init__(
         self,
@@ -95,11 +96,12 @@ class ContainerManager:
 
     def start(self) -> None:
         """Start containers: clean orphans, compose up, readiness check."""
+        self._ensure_test_image_env()
+        self._register_cleanup_handlers()
         self._cleanup_orphans()
         self._compose_up()
-        self._wait_for_readiness()
         self._started = True
-        self._register_cleanup_handlers()
+        self._wait_for_readiness()
 
     def stop(self, capture_logs: bool = True) -> None:
         """Stop and remove containers.
@@ -124,6 +126,33 @@ class ContainerManager:
         (SUIT-05).
         """
         return f"rucio-test-{suite_name}-{rdbms}"
+
+    # ------------------------------------------------------------------
+    # Environment setup
+    # ------------------------------------------------------------------
+
+    def _ensure_test_image_env(self) -> None:
+        """Set ``RUCIO_TEST_IMAGE`` if not already defined.
+
+        In CI the image is built from the test Dockerfile and the env var
+        is set explicitly.  For local development we fall back to the same
+        ``rucio-dev`` image used by the base ``docker-compose.yml`` — source
+        code is volume-mounted so the image only needs the runtime deps.
+
+        To use a custom-built image locally::
+
+            docker build -f etc/docker/test/runtime.Dockerfile \\
+                --build-arg PYTHON=3.9 -t rucio-test:local .
+            RUCIO_TEST_IMAGE=rucio-test:local pytest --suite=remote_dbs
+        """
+        if os.environ.get("RUCIO_TEST_IMAGE"):
+            return
+        repo = os.environ.get("DOCKER_REPO", "rucio")
+        prefix = os.environ.get("RUCIO_DEV_PREFIX", "")
+        tag = os.environ.get("RUCIO_TAG", "latest")
+        default_image = f"docker.io/{repo}/rucio-dev:{prefix}{tag}"
+        os.environ["RUCIO_TEST_IMAGE"] = default_image
+        print(f"[container_manager] RUCIO_TEST_IMAGE not set, using {default_image}")
 
     # ------------------------------------------------------------------
     # Compose command builder
@@ -169,11 +198,19 @@ class ContainerManager:
 
         for project in projects:
             name = project.get("Name", "")
-            if name.startswith(self.PROJECT_PREFIX) and name != self._project_name:
+            if name.startswith(self.PROJECT_PREFIX):
                 print(f"[container_manager] Removing orphaned project: {name}")
                 try:
+                    down_cmd = ["docker", "compose", "-p", name]
+                    config_files = project.get("ConfigFiles", "")
+                    if config_files:
+                        for cf in config_files.split(","):
+                            cf = cf.strip()
+                            if cf:
+                                down_cmd.extend(["-f", cf])
+                    down_cmd.extend(["down", "-v", "-t", "10"])
                     subprocess.run(
-                        ["docker", "compose", "-p", name, "down", "-v", "-t", "10"],
+                        down_cmd,
                         capture_output=True,
                         text=True,
                         timeout=60,
