@@ -15,6 +15,8 @@
 from __future__ import annotations
 
 import os
+import subprocess
+import sys
 
 import pytest
 
@@ -27,6 +29,7 @@ from .xdist_config import configure_xdist
 
 suite_profile_key = pytest.StashKey[SuiteProfile]()
 container_manager_key = pytest.StashKey["ContainerManager"]()
+delegate_to_container_key = pytest.StashKey[bool]()
 
 
 # ---------------------------------------------------------------------------
@@ -59,18 +62,29 @@ def pytest_addoption(parser: pytest.Parser) -> None:
 
 
 def pytest_configure(config: pytest.Config) -> None:
-    """Resolve suite profile and configure xdist.
+    """Resolve suite profile, start containers if needed, and configure xdist.
 
-    On xdist workers the profile is still resolved (it is cheap) and
-    stored in stash so that fixtures can access it, but xdist
-    configuration and the summary banner are skipped -- those only
-    need to run on the controller.
+    Execution model:
+    - **Inside container** (detected via ``/.dockerenv`` or ``RUCIO_SOURCE_DIR``):
+      Run InfraManager directly, then let pytest collect and run tests normally.
+    - **On host with compose_profiles** (e.g. ``remote_dbs``, ``multi_vo``):
+      Start containers via ContainerManager, then delegate the entire pytest
+      session into the rucio container via ``docker compose exec``.  Host-side
+      collection is skipped (``config.args = []``).
+    - **On host without compose_profiles** (e.g. ``client``):
+      No containers, no InfraManager.  Tests run on the host against an
+      externally managed Rucio server.
     """
     is_worker = hasattr(config, "workerinput")
 
     suite_name = config.getoption("suite", default=None)
     if suite_name is None:
         return  # Plugin dormant when --suite not provided
+
+    # Ensure RUCIO_HOME is set so config loading works during collection.
+    # Must happen before any rucio module is imported.
+    if "RUCIO_HOME" not in os.environ:
+        os.environ["RUCIO_HOME"] = str(config.rootdir)
 
     # Resolve profile (with optional RDBMS override from CI matrix)
     rdbms_override = os.environ.get("RDBMS")
@@ -86,24 +100,72 @@ def pytest_configure(config: pytest.Config) -> None:
         configure_xdist(config, profile)
         _print_profile_summary(config, profile)
 
-        # Container lifecycle (Phase 3) -- host-side only
         _in_container = os.path.exists("/.dockerenv") or os.environ.get("RUCIO_SOURCE_DIR")
+
         if _in_container:
+            # Inside container: run InfraManager directly for non-client suites
             print("[plugin] Running inside container, skipping Docker Compose lifecycle")
+            if profile.name != "client":
+                keep_db = config.getoption("--keep-db", default=False)
+                from .infra_manager import InfraManager
+                manager = InfraManager(profile, keep_db=keep_db)
+                manager.setup()
+
         elif profile.compose_profiles:
+            # On host: start containers and delegate test execution
+            # Set RDBMS so the container entrypoint generates the right config
+            os.environ.setdefault("RDBMS", profile.rdbms)
             from .container_manager import ContainerManager
 
             project_name = ContainerManager.make_project_name(profile.name, profile.rdbms)
             cm = ContainerManager(project_name, profile.compose_profiles, str(config.rootdir))
             cm.start()
             config.stash[container_manager_key] = cm
+            config.stash[delegate_to_container_key] = True
 
-        # Database lifecycle (Phase 2)
-        if profile.name != "client":
-            keep_db = config.getoption("--keep-db", default=False)
-            from .infra_manager import InfraManager
-            manager = InfraManager(profile, keep_db=keep_db)
-            manager.setup()
+            # Prevent host-side test collection — tests will be collected
+            # inside the container.  This avoids import errors from rucio
+            # modules that require in-container config/services.
+            config.args = []
+
+        # else: on host, no compose_profiles (client suite) — nothing to do
+
+
+def pytest_runtestloop(session: pytest.Session) -> object | None:
+    """Delegate test execution to the rucio container when running on the host.
+
+    When ``delegate_to_container_key`` is set, this hook builds a pytest
+    command from the original CLI arguments and runs it inside the rucio
+    container via ``docker compose exec``.  Output is streamed in real time.
+
+    Returns ``True`` to prevent the default pytest test loop from running.
+    Returns ``None`` to let pytest handle execution normally (in-container
+    or client suite).
+    """
+    config = session.config
+    if not config.stash.get(delegate_to_container_key, False):
+        return None  # Normal execution
+
+    cm = config.stash[container_manager_key]
+
+    # Build the inner pytest command from original CLI args
+    inner_args = _build_inner_pytest_args(sys.argv[1:])
+    cmd = cm._compose_cmd("exec", "-T", "-w", "/rucio_source", "rucio",
+                          "python", "-m", "pytest", *inner_args)
+
+    print(f"\n[plugin] Delegating test execution to container")
+    print(f"[plugin] Running: pytest {' '.join(inner_args)}\n")
+
+    result = subprocess.run(cmd)
+
+    if result.returncode != 0:
+        session.testsfailed = 1
+    else:
+        # Mark at least one test as collected/passed so pytest doesn't
+        # exit with code 5 ("no tests collected").
+        session.testscollected = 1
+
+    return True  # Prevent default test loop
 
 
 def pytest_terminal_summary(terminalreporter, exitstatus, config):
@@ -150,6 +212,16 @@ def pytest_unconfigure(config: pytest.Config) -> None:
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
+
+def _build_inner_pytest_args(argv: list[str]) -> list[str]:
+    """Filter CLI args for the inner pytest session inside the container.
+
+    Passes through all arguments as-is.  The inner container has the same
+    plugin registered, so ``--suite``, ``--keep-db``, ``--xdist-workers``,
+    markers, test paths, ``-k``, ``-x``, ``-v``, etc. all work.
+    """
+    return list(argv)
 
 
 def _print_profile_summary(config: pytest.Config, profile: SuiteProfile) -> None:

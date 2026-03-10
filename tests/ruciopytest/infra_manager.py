@@ -363,10 +363,17 @@ class InfraManager:
         try:
             print("[infra_manager] Syncing RSE repository")
 
-            if self._profile.name == "special" and os.path.exists('etc/rse_repository.json.special'):
-                rse_repo = 'etc/rse_repository.json.special'
+            # Resolve paths relative to source dir when running inside
+            # a container (CWD=/opt/rucio, source at /rucio_source).
+            source_dir = os.environ.get('RUCIO_SOURCE_DIR', '')
+            if self._profile.name == "special":
+                special = os.path.join(source_dir, 'etc/rse_repository.json.special')
+                if os.path.exists(special):
+                    rse_repo = special
+                else:
+                    rse_repo = os.path.join(source_dir, 'etc/rse_repository.json')
             else:
-                rse_repo = 'etc/rse_repository.json'
+                rse_repo = os.path.join(source_dir, 'etc/rse_repository.json')
 
             with open(rse_repo) as f:
                 rses_list = json.load(f)
@@ -383,13 +390,14 @@ class InfraManager:
                     tb.print_exc()
 
                 try:
-                    for p_id in rses_list[rse]['protocols']:
+                    supported = rses_list[rse]['protocols'].get('supported', {})
+                    for scheme, proto in supported.items():
                         try:
-                            c.add_protocol(rse, p_id)
+                            c.add_protocol(rse, {**proto, 'scheme': scheme})
                         except Duplicate:
                             pass
                         except Exception:
-                            print("[infra_manager] Failed to add protocol to RSE " + rse + ": " + str(p_id))
+                            print("[infra_manager] Failed to add protocol to RSE " + rse + ": " + scheme)
                             tb.print_exc()
                 except KeyError:
                     pass
@@ -443,7 +451,7 @@ class InfraManager:
 
             for key, key_type, value_regexp, values in meta_keys:
                 try:
-                    c.add_did_meta(key, key_type, value_regexp)
+                    c.add_key(key, key_type, value_regexp=value_regexp)
                 except Duplicate:
                     pass
                 except Exception:
@@ -452,7 +460,7 @@ class InfraManager:
 
                 for value in values:
                     try:
-                        c.add_did_meta(key, key_type, value_regexp, value)
+                        c.add_value(key, value)
                     except Duplicate:
                         pass
                     except Exception:
