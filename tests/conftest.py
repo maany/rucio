@@ -74,8 +74,13 @@ def pytest_configure(config: pytest.Config) -> None:
     os.environ['RUCIO_CONFIG_DISABLE_CACHE_READ'] = 'true'
 
     if config.pluginmanager.hasplugin("xdist"):
-        from .ruciopytest import xdist_noparallel_scheduler
-        config.pluginmanager.register(xdist_noparallel_scheduler)
+        try:
+            from .ruciopytest import xdist_noparallel_scheduler
+            config.pluginmanager.register(xdist_noparallel_scheduler)
+        except ImportError:
+            # xdist API mismatch (host vs container version); the scheduler
+            # will be registered inside the container where versions match.
+            pass
 
 
 def pytest_runtest_setup(item: pytest.Item) -> None:

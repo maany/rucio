@@ -248,7 +248,7 @@ print_info "Waiting for services to be ready..."
 # Wait for rucio container to be ready
 print_info "Waiting for rucio container..."
 timeout 60 bash -c "
-    while ! docker compose -p ${COMPOSE_PROJECT} --profile ${PROFILE} ps rucio --status running --format=table 2>/dev/null | grep -q 'dev-rucio-1'; do
+    while ! docker compose -p ${COMPOSE_PROJECT} --profile ${PROFILE} ps rucio --status running --format=table 2>/dev/null | grep -q 'running'; do
         echo -n '.'
         sleep 2
     done

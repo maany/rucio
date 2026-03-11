@@ -2,12 +2,17 @@ name: dev
 
 services:
   rucio:
-    image: ${RUCIO_TEST_IMAGE}
+    build:
+      context: ../../../
+      dockerfile: etc/docker/test/runtime.Dockerfile
+      args:
+        PYTHON: ${PYTHON:-3.9}
+    image: ${RUCIO_TEST_IMAGE:-rucio-test:local}
     environment:
       - RDBMS
       - RUCIO_HOME=/opt/rucio
       - PYTEST_DISABLE_PLUGIN_AUTOLOAD=True
-  
+
   ruciodb:
     profiles:
       - donotstart

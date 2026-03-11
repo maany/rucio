@@ -95,12 +95,15 @@ class ContainerManager:
         return Path(self._root_dir) / self.LOG_DIR
 
     def start(self) -> None:
-        """Start containers: clean orphans, compose up, readiness check."""
-        self._ensure_test_image_env()
+        """Start containers: clean orphans, build/pull, compose up, readiness check."""
+        self._ensure_network_name_env()
         self._register_cleanup_handlers()
         self._cleanup_orphans()
+        self._compose_build()
         self._compose_up()
         self._started = True
+        self._install_rucio_from_source()
+        self._restart_httpd()
         self._wait_for_readiness()
 
     def stop(self, capture_logs: bool = True) -> None:
@@ -131,28 +134,74 @@ class ContainerManager:
     # Environment setup
     # ------------------------------------------------------------------
 
-    def _ensure_test_image_env(self) -> None:
-        """Set ``RUCIO_TEST_IMAGE`` if not already defined.
+    def _compose_build(self) -> None:
+        """Build the rucio test image from source if not already built.
 
-        In CI the image is built from the test Dockerfile and the env var
-        is set explicitly.  For local development we fall back to the same
-        ``rucio-dev`` image used by the base ``docker-compose.yml`` — source
-        code is volume-mounted so the image only needs the runtime deps.
-
-        To use a custom-built image locally::
-
-            docker build -f etc/docker/test/runtime.Dockerfile \\
-                --build-arg PYTHON=3.9 -t rucio-test:local .
-            RUCIO_TEST_IMAGE=rucio-test:local pytest --suite=remote_dbs
+        The test override compose file defines a ``build`` section for the
+        rucio service.  If ``RUCIO_TEST_IMAGE`` is set, compose will skip
+        the build when the image already exists.  Otherwise it builds from
+        ``etc/docker/test/runtime.Dockerfile``.
         """
-        if os.environ.get("RUCIO_TEST_IMAGE"):
+        cmd = self._compose_cmd("build", "rucio")
+        print("[container_manager] Building rucio test image from source...")
+        try:
+            result = subprocess.run(
+                cmd,
+                timeout=600,
+            )
+        except subprocess.TimeoutExpired:
+            raise RuntimeError("Timed out building rucio test image")
+
+        if result.returncode != 0:
+            raise RuntimeError("Failed to build rucio test image")
+
+        print("[container_manager] Image build complete")
+
+    def _install_rucio_from_source(self) -> None:
+        """Install rucio from the mounted source inside the container.
+
+        The volume-mounted source at ``/rucio_source`` may differ from what
+        was baked into the image.  A dev-install ensures the container runs
+        the current working-tree code.
+        """
+        print("[container_manager] Installing rucio from source in container...")
+        cmd = self._compose_cmd(
+            "exec", "-T", "rucio",
+            "pip", "install", "--no-cache-dir", "-e", "/rucio_source",
+        )
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        except subprocess.TimeoutExpired:
+            print("[container_manager] Warning: pip install timed out")
             return
-        repo = os.environ.get("DOCKER_REPO", "rucio")
-        prefix = os.environ.get("RUCIO_DEV_PREFIX", "")
-        tag = os.environ.get("RUCIO_TAG", "latest")
-        default_image = f"docker.io/{repo}/rucio-dev:{prefix}{tag}"
-        os.environ["RUCIO_TEST_IMAGE"] = default_image
-        print(f"[container_manager] RUCIO_TEST_IMAGE not set, using {default_image}")
+
+        if result.returncode != 0:
+            print(f"[container_manager] Warning: pip install failed:\n{result.stderr}")
+        else:
+            print("[container_manager] Rucio installed from source")
+
+    def _restart_httpd(self) -> None:
+        """Restart httpd inside the rucio container after rucio installation."""
+        cmd = self._compose_cmd(
+            "exec", "-T", "rucio",
+            "httpd", "-k", "graceful",
+        )
+        try:
+            subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+            print("[container_manager] httpd restarted")
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            print("[container_manager] Warning: could not restart httpd")
+
+    def _ensure_network_name_env(self) -> None:
+        """Set ``RUCIO_NETWORK_NAME`` to a project-specific value.
+
+        The compose file uses ``${RUCIO_NETWORK_NAME:-ruciodevnetwork}``
+        for the default network.  Without a unique name per project,
+        multiple compose projects would share a network or conflict.
+        """
+        if os.environ.get("RUCIO_NETWORK_NAME"):
+            return
+        os.environ["RUCIO_NETWORK_NAME"] = f"{self._project_name}-network"
 
     # ------------------------------------------------------------------
     # Compose command builder
