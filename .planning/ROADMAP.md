@@ -77,10 +77,11 @@ Plans:
   1. Running `pytest --suite=remote_dbs --co` collects only tests matching the suite's configured test paths and markers (not all tests in the repo)
   2. Running `pytest --infra=postgres14,httpd` without --suite selects infrastructure independently and collects all tests (power-user override mode)
   3. Tests marked with `noparallel` are scheduled by the existing NoParallelScheduler with disjoint-set conflict resolution when xdist is active
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 04-01: TBD
+- [ ] 04-01-PLAN.md — Suite-aware test collection filtering, --infra override, --dry-run support
+- [ ] 04-02-PLAN.md — Enhance NoParallelScheduler with suite-aware grouping, configurable conflict sets, and conflict reporting
 
 ### Phase 5: CI Workflow and Migration
 **Goal**: simple-autotest.yml replaces the matrix/script orchestration chain, running all suites via pytest commands identical to local execution, with lint/type checks in a separate workflow
@@ -108,5 +109,15 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 | 1. Plugin Skeleton and Suite Profiles | 2/2 | Complete    | 2026-02-20 |
 | 2. Database Lifecycle and Bootstrap | 2/2 | Complete    | 2026-03-05 |
 | 3. Container Lifecycle and Cleanup | 2/3 | In progress | - |
-| 4. Test Collection and Parallelism Integration | 0/1 | Not started | - |
+| 4. Test Collection and Parallelism Integration | 0/2 | Not started | - |
 | 5. CI Workflow and Migration | 0/2 | Not started | - |
+
+### Phase 6: Host pytest with optional --run-in-container forwarding to container pytest
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 5
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 6 to break down)
