@@ -55,6 +55,7 @@ Progress: [#######...] 70%
 
 *Updated after each plan completion*
 | Phase 04 P01 | 4min | 2 tasks | 4 files |
+| Phase 04 P02 | 2min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -89,6 +90,9 @@ Recent decisions affecting current work:
 - 03-03: Client suite compose_profiles set to empty tuple to skip container lifecycle
 - [Phase 04]: Moved stash keys to __init__.py to avoid circular imports between plugin.py and collection.py
 - [Phase 04]: --infra without --suite creates synthetic merged profile; --dry-run skips container lifecycle entirely
+- [Phase 04]: Positional args in noparallel marker take precedence over EXCLUSIVE default
+- [Phase 04]: Suite-aware grouping activates only for synthetic merged profiles ('+' in name); single-suite unchanged
+- [Phase 04]: Conflict report passed through config.stash[noparallel_report_key] for scheduler-to-terminal decoupling
 
 ### Pending Todos
 

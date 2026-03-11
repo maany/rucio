@@ -37,7 +37,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Parallelism
 
-- [ ] **PARA-01**: Plugin preserves and integrates existing NoParallelScheduler with disjoint-set conflict resolution
+- [x] **PARA-01**: Plugin preserves and integrates existing NoParallelScheduler with disjoint-set conflict resolution
 - [x] **PARA-02**: Plugin auto-disables xdist for incompatible RDBMS (sqlite, mysql, oracle)
 - [x] **PARA-03**: User can configure xdist worker count via `--xdist-workers=N` CLI argument
 - [x] **PARA-04**: Plugin auto-detects CI environment and sets sensible xdist defaults (3 workers on GHA, auto locally)
@@ -109,7 +109,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DBBS-03 | Phase 2 | Complete |
 | DBBS-04 | Phase 2 | Complete |
 | DBBS-05 | Phase 2 | Complete |
-| PARA-01 | Phase 4 | Pending |
+| PARA-01 | Phase 4 | Complete |
 | PARA-02 | Phase 1 | Complete |
 | PARA-03 | Phase 1 | Complete |
 | PARA-04 | Phase 1 | Complete |
