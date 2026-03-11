@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-03-09T20:08:26Z"
+last_updated: "2026-03-09T20:14:41.105Z"
 progress:
   total_phases: 3
   completed_phases: 3
@@ -54,6 +54,7 @@ Progress: [#######...] 70%
 | Phase 03 P03 | 1min | 2 tasks | 2 files |
 
 *Updated after each plan completion*
+| Phase 04 P01 | 4min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -86,10 +87,16 @@ Recent decisions affecting current work:
 - 03-03: Signal handlers registered before any blocking Docker operations (compose up, readiness check)
 - 03-03: Removed same-name exclusion from orphan filter; safe because cleanup runs before startup
 - 03-03: Client suite compose_profiles set to empty tuple to skip container lifecycle
+- [Phase 04]: Moved stash keys to __init__.py to avoid circular imports between plugin.py and collection.py
+- [Phase 04]: --infra without --suite creates synthetic merged profile; --dry-run skips container lifecycle entirely
 
 ### Pending Todos
 
 None yet.
+
+### Roadmap Evolution
+
+- Phase 6 added: Host pytest with optional --run-in-container forwarding to container pytest
 
 ### Blockers/Concerns
 

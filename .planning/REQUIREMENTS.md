@@ -22,8 +22,8 @@ Requirements for initial release. Each maps to roadmap phases.
 
 - [x] **SUIT-01**: User can select a test suite via `--suite=<name>` (remote_dbs, sqlite, multi_vo, client, votest)
 - [x] **SUIT-02**: Each suite maps to a declarative profile specifying compose profiles, services, xdist settings, and test paths/markers
-- [ ] **SUIT-03**: User can override infrastructure independently via `--infra=postgres14,httpd` without passing `--suite`
-- [ ] **SUIT-04**: Plugin filters test collection based on suite profile (include/exclude by path and marker)
+- [x] **SUIT-03**: User can override infrastructure independently via `--infra=postgres14,httpd` without passing `--suite`
+- [x] **SUIT-04**: Plugin filters test collection based on suite profile (include/exclude by path and marker)
 - [x] **SUIT-05**: Each test run uses a unique compose project name (`rucio-test-{suite}-{rdbms}`) to avoid collisions
 - [x] **SUIT-06**: User can pass `--keep-db` to skip database rebuild on subsequent runs
 
@@ -100,8 +100,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CONT-08 | Phase 2 | Complete |
 | SUIT-01 | Phase 1 | Complete |
 | SUIT-02 | Phase 1 | Complete |
-| SUIT-03 | Phase 4 | Pending |
-| SUIT-04 | Phase 4 | Pending |
+| SUIT-03 | Phase 4 | Complete |
+| SUIT-04 | Phase 4 | Complete |
 | SUIT-05 | Phase 3 | Complete |
 | SUIT-06 | Phase 2 | Complete |
 | DBBS-01 | Phase 2 | Complete |
