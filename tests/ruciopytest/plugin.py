@@ -52,6 +52,26 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         dest="xdist_workers",
         help="Number of xdist workers (overrides auto-detection)",
     )
+    group.addoption(
+        "--infra",
+        type=str,
+        default=None,
+        help="Override infrastructure (comma-separated compose profiles or service names)",
+    )
+    group.addoption(
+        "--dry-run",
+        action="store_true",
+        default=False,
+        dest="dry_run",
+        help="Show infrastructure plan and test collection without executing",
+    )
+    group.addoption(
+        "--dry-run-json",
+        action="store_true",
+        default=False,
+        dest="dry_run_json",
+        help="Output dry-run report as JSON (implies --dry-run)",
+    )
 
 
 def pytest_configure(config: pytest.Config) -> None:
@@ -71,27 +91,121 @@ def pytest_configure(config: pytest.Config) -> None:
     is_worker = hasattr(config, "workerinput")
 
     suite_name = config.getoption("suite", default=None)
-    if suite_name is None:
-        return  # Plugin dormant when --suite not provided
+    infra_arg = config.getoption("infra", default=None)
+    dry_run = config.getoption("dry_run", default=False)
+    dry_run_json = config.getoption("dry_run_json", default=False)
+
+    # --dry-run-json implies --dry-run
+    if dry_run_json:
+        dry_run = True
+        config.option.dry_run = True
+
+    if suite_name is None and infra_arg is None:
+        return  # Plugin dormant when neither --suite nor --infra provided
+
+    # Register collection.py hooks
+    from . import collection as collection_module
+    if not config.pluginmanager.hasplugin("rucio_collection"):
+        config.pluginmanager.register(collection_module, "rucio_collection")
 
     # Ensure RUCIO_HOME is set so config loading works during collection.
     # Must happen before any rucio module is imported.
     if "RUCIO_HOME" not in os.environ:
         os.environ["RUCIO_HOME"] = str(config.rootdir)
 
-    # Resolve profile (with optional RDBMS override from CI matrix)
-    rdbms_override = os.environ.get("RDBMS")
-    profile = resolve_profile(suite_name, rdbms_override)
+    # Known RDBMS profiles for inferring rdbms from --infra
+    _RDBMS_PROFILES = {"postgres14", "mysql8", "oracle"}
+
+    if suite_name is not None and infra_arg is not None:
+        # --suite WITH --infra: use suite's test collection, override infrastructure
+        from .collection import _resolve_infra
+
+        rdbms_override = os.environ.get("RDBMS")
+        profile = resolve_profile(suite_name, rdbms_override)
+
+        resolved_profiles, _raw_services = _resolve_infra(infra_arg)
+        # Infer RDBMS from resolved profiles
+        rdbms_from_infra = next(
+            (p for p in resolved_profiles if p in _RDBMS_PROFILES), None
+        )
+        override_rdbms = rdbms_from_infra or profile.rdbms
+
+        profile = SuiteProfile(
+            name=profile.name,
+            rdbms=override_rdbms,
+            compose_profiles=tuple(sorted(resolved_profiles)),
+            xdist_enabled=profile.xdist_enabled,
+            default_workers_ci=profile.default_workers_ci,
+            default_workers_local=profile.default_workers_local,
+            test_paths=profile.test_paths,
+            markers=profile.markers,
+            exclude_paths=profile.exclude_paths,
+            env_vars=profile.env_vars,
+        )
+
+    elif infra_arg is not None and suite_name is None:
+        # --infra WITHOUT --suite: infer suites from infrastructure
+        from .collection import _resolve_infra, _infer_suites_from_infra
+
+        resolved_profiles, _raw_services = _resolve_infra(infra_arg)
+        matching_suites = _infer_suites_from_infra(resolved_profiles)
+
+        if not matching_suites:
+            raise pytest.UsageError(
+                f"No suites match infrastructure: {infra_arg}"
+            )
+
+        # Create a synthetic merged profile from all matching suites
+        all_test_paths: set[str] = set()
+        all_markers: set[str] = set()
+        all_exclude_paths: set[str] = set()
+        all_env_vars: dict[str, str] = {}
+        suite_names = []
+
+        for s in matching_suites:
+            all_test_paths.update(s.test_paths)
+            all_markers.update(s.markers)
+            all_exclude_paths.update(s.exclude_paths)
+            all_env_vars.update(s.env_vars)
+            suite_names.append(s.name)
+
+        # Infer RDBMS from resolved profiles
+        rdbms_from_infra = next(
+            (p for p in resolved_profiles if p in _RDBMS_PROFILES), None
+        )
+
+        profile = SuiteProfile(
+            name="+".join(sorted(suite_names)),
+            rdbms=rdbms_from_infra or matching_suites[0].rdbms,
+            compose_profiles=tuple(sorted(resolved_profiles)),
+            xdist_enabled=any(s.xdist_enabled for s in matching_suites),
+            default_workers_ci=max(s.default_workers_ci for s in matching_suites),
+            default_workers_local=matching_suites[0].default_workers_local,
+            test_paths=tuple(sorted(all_test_paths)),
+            markers=tuple(sorted(all_markers)),
+            exclude_paths=tuple(sorted(all_exclude_paths)),
+            env_vars=all_env_vars,
+        )
+
+    else:
+        # --suite only (no --infra): standard profile resolution
+        rdbms_override = os.environ.get("RDBMS")
+        profile = resolve_profile(suite_name, rdbms_override)
 
     # Store in stash (available on both controller and workers)
     config.stash[suite_profile_key] = profile
 
     # Backward compatibility: many existing tests check os.environ["SUITE"]
-    os.environ["SUITE"] = suite_name
+    if suite_name is not None:
+        os.environ["SUITE"] = suite_name
 
     if not is_worker:
         configure_xdist(config, profile)
         _print_profile_summary(config, profile)
+
+        # --dry-run: skip container lifecycle entirely
+        if dry_run:
+            return
 
         _in_container = os.path.exists("/.dockerenv") or os.environ.get("RUCIO_SOURCE_DIR")
 
@@ -224,6 +338,26 @@ def _print_profile_summary(config: pytest.Config, profile: SuiteProfile) -> None
     else:
         workers = 0
 
+    infra_arg = config.getoption("infra", default=None)
+    xdist_disabled_note = (
+        not profile.xdist_enabled and profile.markers
+    )
+
+    # Build the lines to print
+    lines = [
+        f"  Suite:          {profile.name}",
+        f"  RDBMS:          {profile.rdbms}",
+        f"  xdist enabled:  {profile.xdist_enabled}",
+        f"  Workers:        {workers}",
+        f"  Test paths:     {', '.join(profile.test_paths)}",
+    ]
+    if profile.exclude_paths:
+        lines.append(f"  Exclude paths:  {', '.join(profile.exclude_paths)}")
+    if infra_arg:
+        lines.append(f"  Infra override: {infra_arg}")
+    if profile.env_vars:
+        lines.append(f"  Env vars:       {profile.env_vars}")
+
     # Terminal reporter may not be registered yet during early pytest_configure.
     # Use pluginmanager to check; fall back to plain print if unavailable.
     terminalreporter = config.pluginmanager.get_plugin("terminalreporter")
@@ -231,13 +365,10 @@ def _print_profile_summary(config: pytest.Config, profile: SuiteProfile) -> None
         tw = terminalreporter._tw
         tw.line()
         tw.sep("=", "Rucio Test Suite Configuration")
-        tw.line(f"  Suite:          {profile.name}")
-        tw.line(f"  RDBMS:          {profile.rdbms}")
-        tw.line(f"  xdist enabled:  {profile.xdist_enabled}")
-        tw.line(f"  Workers:        {workers}")
-        tw.line(f"  Test paths:     {', '.join(profile.test_paths)}")
-        if profile.env_vars:
-            tw.line(f"  Env vars:       {profile.env_vars}")
+        for line in lines:
+            tw.line(line)
+        if not profile.xdist_enabled:
+            tw.line("  NOTE: xdist disabled, noparallel markers have no effect")
         tw.sep("=")
         tw.line()
     else:
@@ -246,12 +377,9 @@ def _print_profile_summary(config: pytest.Config, profile: SuiteProfile) -> None
         print("=" * 60)
         print("  Rucio Test Suite Configuration")
         print("=" * 60)
-        print(f"  Suite:          {profile.name}")
-        print(f"  RDBMS:          {profile.rdbms}")
-        print(f"  xdist enabled:  {profile.xdist_enabled}")
-        print(f"  Workers:        {workers}")
-        print(f"  Test paths:     {', '.join(profile.test_paths)}")
-        if profile.env_vars:
-            print(f"  Env vars:       {profile.env_vars}")
+        for line in lines:
+            print(line)
+        if not profile.xdist_enabled:
+            print("  NOTE: xdist disabled, noparallel markers have no effect")
         print("=" * 60)
         print()
