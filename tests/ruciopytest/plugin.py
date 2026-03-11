@@ -22,14 +22,7 @@ import pytest
 
 from .profiles import SuiteProfile, resolve_profile
 from .xdist_config import configure_xdist
-
-# ---------------------------------------------------------------------------
-# Type-safe stash keys
-# ---------------------------------------------------------------------------
-
-suite_profile_key = pytest.StashKey[SuiteProfile]()
-container_manager_key = pytest.StashKey["ContainerManager"]()
-delegate_to_container_key = pytest.StashKey[bool]()
+from . import suite_profile_key, container_manager_key, delegate_to_container_key
 
 
 # ---------------------------------------------------------------------------

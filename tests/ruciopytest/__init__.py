@@ -14,7 +14,17 @@
 
 import enum
 
+import pytest
+
 from .profiles import SUITE_PROFILES, SuiteProfile  # noqa: F401
+
+# ---------------------------------------------------------------------------
+# Type-safe stash keys (shared across plugin.py and collection.py)
+# ---------------------------------------------------------------------------
+
+suite_profile_key = pytest.StashKey[SuiteProfile]()
+container_manager_key = pytest.StashKey["ContainerManager"]()
+delegate_to_container_key = pytest.StashKey[bool]()
 
 
 class NoParallelGroups(enum.Enum):

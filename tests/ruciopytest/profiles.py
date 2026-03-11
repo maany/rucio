@@ -45,6 +45,7 @@ class SuiteProfile:
     default_workers_local: str = "auto"
     test_paths: tuple[str, ...] = ("tests/",)
     markers: tuple[str, ...] = ()
+    exclude_paths: tuple[str, ...] = ()
     env_vars: dict[str, str] = field(default_factory=dict)
 
 
@@ -140,6 +141,7 @@ def resolve_profile(
             default_workers_local=profile.default_workers_local if xdist_enabled else "0",
             test_paths=profile.test_paths,
             markers=profile.markers,
+            exclude_paths=profile.exclude_paths,
             env_vars=profile.env_vars,
         )
 
