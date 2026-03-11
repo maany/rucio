@@ -24,6 +24,11 @@ from .profiles import SuiteProfile, resolve_profile
 from .xdist_config import configure_xdist
 from . import suite_profile_key, container_manager_key, delegate_to_container_key
 
+try:
+    from .xdist_noparallel_scheduler import noparallel_report_key
+except ImportError:
+    noparallel_report_key = None
+
 
 # ---------------------------------------------------------------------------
 # Hooks
@@ -307,6 +312,19 @@ def pytest_terminal_summary(terminalreporter, exitstatus, config):
         except (AttributeError, TypeError):
             # Fallback: junitxml API may vary across pytest versions
             pass
+
+    # NoParallel conflict report
+    if noparallel_report_key is not None:
+        scheduler_report = config.stash.get(noparallel_report_key, None)
+        if scheduler_report:
+            terminalreporter.write_sep("=", "NoParallel Conflict Summary")
+            for group, tests in sorted(scheduler_report.items()):
+                terminalreporter.write_line(f"  Group '{group}': {len(tests)} tests")
+                for t in tests[:5]:  # Show first 5
+                    terminalreporter.write_line(f"    - {t}")
+                if len(tests) > 5:
+                    terminalreporter.write_line(f"    ... and {len(tests) - 5} more")
+            terminalreporter.write_sep("=")
 
 
 def pytest_unconfigure(config: pytest.Config) -> None:
