@@ -89,7 +89,11 @@ SUITE_PROFILES: dict[str, SuiteProfile] = {
         xdist_enabled=True,
         default_workers_ci=3,
         default_workers_local="auto",
-        test_paths=("tests/",),
+        test_paths=(
+            "tests/test_clients.py",
+            "tests/test_bin_rucio.py",
+            "tests/test_module_import.py",
+        ),
     ),
     "votest": SuiteProfile(
         name="votest",
