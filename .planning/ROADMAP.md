@@ -92,11 +92,11 @@ Plans:
   2. A developer running `pytest --suite=remote_dbs` locally gets identical behavior to the CI run (same container setup, same test selection, same output)
   3. CI produces JUnit XML output that GitHub Actions displays as test results with pass/fail annotations
   4. Type checking and syntax checking run in a separate lint/format workflow, not in simple-autotest.yml
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 05-01: TBD
-- [ ] 05-02: TBD
+- [ ] 05-01-PLAN.md — Replace simple-autotest.yml prototype with clean workflow using runtime_images.yml and pytest --suite, clean conftest.py of legacy lifecycle code
+- [ ] 05-02-PLAN.md — Create lint.yml workflow consolidating pre-commit, type annotation regression, and pyright checks
 
 ## Progress
 
