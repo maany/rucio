@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: completed
-stopped_at: Completed 05-02-PLAN.md
-last_updated: "2026-03-13T12:03:32.237Z"
+stopped_at: Completed 05-01-PLAN.md
+last_updated: "2026-03-13T12:04:35.520Z"
 last_activity: 2026-03-09 -- Completed 03-03-PLAN.md
 progress:
   total_phases: 6
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 11
-  completed_plans: 10
+  completed_plans: 11
   percent: 70
 ---
 
@@ -60,6 +60,7 @@ Progress: [#######...] 70%
 | Phase 04 P01 | 4min | 2 tasks | 4 files |
 | Phase 04 P02 | 2min | 2 tasks | 3 files |
 | Phase 05 P02 | 1min | 2 tasks | 1 files |
+| Phase 05 P01 | 2min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -98,6 +99,8 @@ Recent decisions affecting current work:
 - [Phase 04]: Suite-aware grouping activates only for synthetic merged profiles ('+' in name); single-suite unchanged
 - [Phase 04]: Conflict report passed through config.stash[noparallel_report_key] for scheduler-to-terminal decoupling
 - [Phase 05]: Copied python_annotations from autotest.yml (ruff) not code-quality.yml (flake8) for lint.yml
+- [Phase 05]: Reused pinned action hashes from runtime_images.yml for CI workflow consistency
+- [Phase 05]: No backward-compatibility shims for removed lifecycle fixtures; InfraManager handles all lifecycle
 
 ### Pending Todos
 
@@ -115,6 +118,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-13T12:03:32.233Z
-Stopped at: Completed 05-02-PLAN.md
+Last session: 2026-03-13T12:04:35.517Z
+Stopped at: Completed 05-01-PLAN.md
 Resume file: None

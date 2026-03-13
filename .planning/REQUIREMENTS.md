@@ -45,9 +45,9 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### CI Integration
 
-- [ ] **CICD-01**: `simple-autotest.yml` workflow runs all suites using only `pytest` commands
-- [ ] **CICD-02**: Local and CI test execution are identical (same pytest command, same container behavior)
-- [ ] **CICD-03**: Plugin produces JUnit XML output compatible with GitHub Actions test reporting
+- [x] **CICD-01**: `simple-autotest.yml` workflow runs all suites using only `pytest` commands
+- [x] **CICD-02**: Local and CI test execution are identical (same pytest command, same container behavior)
+- [x] **CICD-03**: Plugin produces JUnit XML output compatible with GitHub Actions test reporting
 - [x] **CICD-04**: Type checking and syntax checking moved to a separate lint/format workflow
 
 ### Plugin Architecture
@@ -114,9 +114,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PARA-03 | Phase 1 | Complete |
 | PARA-04 | Phase 1 | Complete |
 | PARA-05 | Phase 1 | Complete |
-| CICD-01 | Phase 5 | Pending |
-| CICD-02 | Phase 5 | Pending |
-| CICD-03 | Phase 5 | Pending |
+| CICD-01 | Phase 5 | Complete |
+| CICD-02 | Phase 5 | Complete |
+| CICD-03 | Phase 5 | Complete |
 | CICD-04 | Phase 5 | Complete |
 | PLUG-01 | Phase 1 | Complete |
 | PLUG-02 | Phase 1 | Complete |
