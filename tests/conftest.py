@@ -192,55 +192,55 @@ def long_vo() -> str:
 
 
 @pytest.fixture(scope='module')
-def account_client(rucio_bootstrap) -> "AccountClient":
+def account_client() -> "AccountClient":
     from rucio.client.accountclient import AccountClient
 
     return AccountClient()
 
 
 @pytest.fixture(scope='module')
-def replica_client(rucio_bootstrap) -> "ReplicaClient":
+def replica_client() -> "ReplicaClient":
     from rucio.client.replicaclient import ReplicaClient
 
     return ReplicaClient()
 
 
 @pytest.fixture(scope='module')
-def rucio_client(rucio_bootstrap) -> "Client":
+def rucio_client() -> "Client":
     from rucio.client import Client
     return Client()
 
 
 @pytest.fixture(scope='module')
-def did_client(rucio_bootstrap) -> "DIDClient":
+def did_client() -> "DIDClient":
     from rucio.client.didclient import DIDClient
 
     return DIDClient()
 
 
 @pytest.fixture(scope='module')
-def rse_client(rucio_bootstrap) -> "RSEClient":
+def rse_client() -> "RSEClient":
     from rucio.client.rseclient import RSEClient
 
     return RSEClient()
 
 
 @pytest.fixture(scope='module')
-def scope_client(rucio_bootstrap) -> "ScopeClient":
+def scope_client() -> "ScopeClient":
     from rucio.client.scopeclient import ScopeClient
 
     return ScopeClient()
 
 
 @pytest.fixture(scope='module')
-def dirac_client(rucio_bootstrap) -> "DiracClient":
+def dirac_client() -> "DiracClient":
     from rucio.client.diracclient import DiracClient
 
     return DiracClient()
 
 
 @pytest.fixture
-def download_client(rucio_bootstrap) -> "DownloadClient":
+def download_client() -> "DownloadClient":
     from rucio.client.downloadclient import DownloadClient
 
     return DownloadClient()
@@ -850,139 +850,5 @@ def db_write_session():
         yield session
 
 
-@pytest.fixture(scope="session", autouse=True)
-def test_environment_setup(request: pytest.FixtureRequest) -> None:
-    """
-    Session-level setup for test environment based on suite type.
-    Handles memcached, cleanup, and basic environment preparation.
-    """
-    import os
-    import subprocess
-    import tempfile
-    from pathlib import Path
-    
-    suite = request.config.getoption("suite", default=None)
-    if suite is None:
-        # Plugin dormant: no --suite provided, skip environment setup
-        return
-
-    # Set SUITE environment variable for compatibility with existing code
-    # (also set by the plugin, but ensure it's available in fixtures too)
-    os.environ['SUITE'] = suite
-
-    if suite == "client":
-        # Client-only tests need minimal setup
-        return
-    
-    # Server tests need full environment setup
-    print("Setting up test environment for suite:", suite)
-    
-    # Start memcached if not running
-    try:
-        subprocess.run(['memcached', '-u', 'root', '-d'], check=False, capture_output=True)
-    except FileNotFoundError:
-        print("Warning: memcached not found, skipping memcached setup")
-    
-    # Clear memcache
-    try:
-        with open('/dev/tcp/127.0.0.1/11211', 'w') as f:
-            f.write('flush_all\n')
-    except:
-        # Alternative method using netcat or telnet if direct socket fails
-        try:
-            subprocess.run(['echo', 'flush_all'], stdout=subprocess.PIPE, check=False)
-        except:
-            print("Warning: Could not clear memcache")
-    
-    # Cleanup temporary files
-    temp_patterns = [
-        '/tmp/.rucio_*/',
-        '/tmp/rucio_rse/*'
-    ]
-    
-    for pattern in temp_patterns:
-        try:
-            import glob
-            for path in glob.glob(pattern):
-                if os.path.isdir(path):
-                    import shutil
-                    shutil.rmtree(path, ignore_errors=True)
-                elif os.path.isfile(path):
-                    os.remove(path)
-        except Exception as e:
-            print(f"Warning: Could not cleanup {pattern}: {e}")
-    
-    # Clean .pyc files from lib directory
-    try:
-        subprocess.run(['find', 'lib', '-iname', '*.pyc', '-delete'], 
-                      check=False, capture_output=True)
-    except Exception as e:
-        print(f"Warning: Could not clean .pyc files: {e}")
-
-
-@pytest.fixture(scope="session", autouse=True)
-def database_setup(request: pytest.FixtureRequest, test_environment_setup) -> None:
-    """
-    Session-level database setup marker.
-    The actual database initialization is done in pytest_configure hook
-    to ensure it happens before test collection.
-    This fixture now only serves as a dependency marker for other fixtures.
-    """
-    suite = request.config.getoption("suite", default=None)
-
-    if suite is None or suite == "client":
-        pytest.skip("Client tests don't need database setup")
-
-    # Database is already initialized in pytest_configure
-    print("[database_setup] Database already initialized in pytest_configure")
-
-
-@pytest.fixture(scope="session", autouse=True)
-def rucio_bootstrap(request: pytest.FixtureRequest, database_setup, test_environment_setup) -> None:
-    """
-    Session-level Rucio bootstrap setup.
-    Handles Apache restart, test data bootstrap, RSE sync, and metadata sync.
-    """
-    import os
-    import subprocess
-    import sys
-    import time
-    from pathlib import Path
-    
-    suite = request.config.getoption("suite", default=None)
-    activate_rses = request.config.getoption("--activate-rses")
-    
-    if suite == "client":
-        print("Client suite: minimal bootstrap")
-        # Set client-specific configuration
-        source_path = os.environ.get('RUCIO_HOME', '/opt/rucio')
-        client_cfg = f"{source_path}/etc/docker/test/extra/rucio_client.cfg"
-        target_cfg = f"{source_path}/etc/rucio.cfg"
-        
-        if os.path.exists(client_cfg):
-            import shutil
-            shutil.copy2(client_cfg, target_cfg)
-            print(f"Copied client config from {client_cfg} to {target_cfg}")
-        return
-    
-    print("[rucio_bootstrap] Server suite: full bootstrap")
-
-    # All initialization (httpd restart, bootstrap, RSE sync, metadata sync) is already done in pytest_configure
-    print("[rucio_bootstrap] All initialization already completed in pytest_configure")
-
-    # Activate RSEs if requested (this is optional and only done via CLI flag)
-    if activate_rses:
-        print("[rucio_bootstrap] Activating default RSEs (XRD1, XRD2, XRD3, SSH1)")
-        try:
-            result = subprocess.run(['tools/docker_activate_rses.sh'],
-                                  check=True, capture_output=True, text=True)
-            print("[rucio_bootstrap] RSE activation completed")
-        except subprocess.CalledProcessError as e:
-            print(f"[rucio_bootstrap] RSE activation failed: {e}")
-            print(f"stdout: {e.stdout}")
-            print(f"stderr: {e.stderr}")
-            pytest.fail("Failed to activate RSEs")
-        except FileNotFoundError:
-            print("[rucio_bootstrap] Warning: docker_activate_rses.sh not found, skipping RSE activation")
 
 
