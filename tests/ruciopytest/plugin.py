@@ -232,11 +232,25 @@ def pytest_configure(config: pytest.Config) -> None:
         configure_xdist(config, profile)
         _print_profile_summary(config, profile)
 
-        # --dry-run: skip container lifecycle entirely
-        if dry_run:
-            return
-
         _in_container = os.path.exists("/.dockerenv") or os.environ.get("RUCIO_SOURCE_DIR")
+
+        # Reconcile Phase 4's dry-run early-exit with Phase 6 forwarding (FWD-11).
+        # Forwarding wins for container suites: when forwarding applies, --dry-run
+        # (and --co) must fall through to start containers and delegate so the
+        # in-container pytest produces the authoritative listing/report (truthful
+        # over fast). Compute the forwarding decision ONCE (single side-effecting
+        # _should_forward_to_container call) and reuse it for both the dry-run
+        # guard and the delegation branch below.
+        forwarding_applies = (
+            not _in_container
+            and bool(profile.compose_profiles)
+            and _should_forward_to_container(config, profile)
+        )
+
+        # --dry-run on a host-side / non-forwarded run: keep Phase 4's fast path
+        # and skip container lifecycle entirely.
+        if dry_run and not forwarding_applies:
+            return  # host-side fast path: skip container lifecycle for non-forwarded dry-run
 
         if _in_container:
             # Inside container: run InfraManager directly for non-client suites
@@ -252,8 +266,10 @@ def pytest_configure(config: pytest.Config) -> None:
             from . import forwarding
             forwarding.register_container_stream(config)
 
-        elif profile.compose_profiles:
-            # On host: start containers and delegate test execution
+        elif forwarding_applies:
+            # On host with a forwarding container suite: start containers and
+            # delegate test execution (forwarding_applies already encodes
+            # compose_profiles + not in-container + _should_forward_to_container).
             # Set RDBMS so the container entrypoint generates the right config
             os.environ.setdefault("RDBMS", profile.rdbms)
             from .container_manager import ContainerManager
