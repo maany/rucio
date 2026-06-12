@@ -60,6 +60,7 @@ __all__ = [
     "ReportStreamEmitter",
     "build_env_flags",
     "build_inner_pytest_args",
+    "finalize_host_exit",
     "make_emitter_from_env",
     "mirror_exit_code",
     "register_container_stream",
@@ -271,11 +272,39 @@ def mirror_exit_code(returncode: int) -> int:
     """Mirror the container pytest returncode onto the host outcome.
 
     A deliberately trivial identity seam (0 OK, 1 failed, 2 interrupted,
-    3 internal error, 4 usage error, 5 no tests collected) so Plan 03 has a
-    single tested home for the exit-mirror requirement (FWD-05): it can assign
-    the result to ``session.exitstatus`` and/or pass it to ``pytest.exit``.
+    3 internal error, 4 usage error, 5 no tests collected) so the host has a
+    single tested home for the exit-mirror requirement (FWD-05). The actual
+    application of the code happens in :func:`finalize_host_exit`.
     """
     return int(returncode)
+
+
+def finalize_host_exit(session: "Session", returncode: int) -> None:
+    """Force the container's ``returncode`` to be the host's exact exit status.
+
+    ``_pytest.main.wrap_session`` sets ``session.exitstatus`` from ``_main``'s
+    return value, which is derived **only** from ``session.testsfailed`` /
+    ``session.testscollected`` -- so any ``session.exitstatus`` assigned inside
+    ``pytest_runtestloop`` is silently discarded. Because forwarding suppresses
+    host-side collection (``config.args = []``), ``testscollected`` is always 0
+    on the host; an all-pass or ``--co`` container run would therefore exit 5
+    (NO_TESTS_COLLECTED), and codes 2/3/4 could never surface (FWD-05 violated).
+
+    ``pytest.exit(returncode=...)`` is the one mechanism ``wrap_session`` honors
+    verbatim -- it reads ``exit.Exception.returncode`` directly -- so every
+    container exit code (0,1,2,3,4,5) mirrors exactly. This raises ``Exit`` and
+    therefore does not return; ``pytest_sessionfinish`` and ``pytest_unconfigure``
+    still run in ``wrap_session``'s ``finally`` block, so replayed reports flush
+    to ``--junitxml`` (FWD-06), the terminal summary prints, and the containers
+    are torn down.
+    """
+    import pytest
+
+    code = mirror_exit_code(returncode)
+    # Honored by any hook that reads exitstatus before the unwind; the authoritative
+    # value is carried by the Exit exception below.
+    session.exitstatus = code
+    pytest.exit(reason=f"forwarded container pytest exited {code}", returncode=code)
 
 
 # ---------------------------------------------------------------------------

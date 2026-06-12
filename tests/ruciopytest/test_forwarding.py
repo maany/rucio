@@ -35,6 +35,7 @@ from tests.ruciopytest.forwarding import (
     ReportStreamEmitter,
     build_env_flags,
     build_inner_pytest_args,
+    finalize_host_exit,
     make_emitter_from_env,
     mirror_exit_code,
     replay_report_line,
@@ -291,6 +292,77 @@ def test_build_inner_args_passes_everything_else_through():
 @pytest.mark.parametrize("code", [0, 1, 2, 3, 4, 5])
 def test_mirror_exit_code_is_identity(code):
     assert mirror_exit_code(code) == code
+
+
+# ---------------------------------------------------------------------------
+# Behavior 5b: finalize_host_exit makes the container code the HOST exit status.
+#
+# Regression for the live-verification gap: pytest's _main() derives the session
+# exit code purely from session.testsfailed / session.testscollected, discarding
+# any session.exitstatus set in pytest_runtestloop. Because forwarding suppresses
+# host-side collection (config.args = []), testscollected is always 0, so an
+# all-pass or --co forwarded run would wrongly exit 5 (NO_TESTS_COLLECTED) and
+# codes 2/3/4 could never surface. finalize_host_exit must force the exact code.
+# ---------------------------------------------------------------------------
+
+# A forwarder-shaped conftest: no host collection happens; the loop is replaced
+# and the container's returncode (injected via env) is made authoritative.
+_FORWARDER_CONFTEST = """
+    import os
+    from tests.ruciopytest import forwarding
+
+    def pytest_runtestloop(session):
+        forwarding.finalize_host_exit(session, int(os.environ["FAKE_RC"]))
+"""
+
+# Documents the ROOT CAUSE: the naive assignment that finalize_host_exit replaces.
+_NAIVE_CONFTEST = """
+    def pytest_runtestloop(session):
+        session.exitstatus = 0   # discarded by _main()
+        return True
+"""
+
+# Replays one real passing report, then finalizes — proving junitxml (FWD-06)
+# and the terminal summary still emit on the pytest.exit path.
+_REPLAY_CONFTEST = """
+    from _pytest.reports import TestReport
+    from tests.ruciopytest import forwarding
+
+    def pytest_runtestloop(session):
+        rep = TestReport(
+            nodeid="tests/test_fake.py::test_ok",
+            location=("tests/test_fake.py", 0, "test_ok"),
+            keywords={}, outcome="passed", longrepr=None, when="call",
+        )
+        session.config.hook.pytest_runtest_logreport(report=rep)
+        forwarding.finalize_host_exit(session, 0)
+"""
+
+
+@pytest.mark.parametrize("rc", [0, 1, 2, 5])
+def test_finalize_host_exit_mirrors_container_code(pytester, monkeypatch, rc):
+    monkeypatch.setenv("FAKE_RC", str(rc))
+    pytester.makeconftest(_FORWARDER_CONFTEST)
+    result = pytester.runpytest_inprocess("-p", "no:cacheprovider")
+    assert result.ret == rc
+
+
+def test_naive_exitstatus_assignment_is_overwritten_to_5(pytester):
+    # Without finalize_host_exit, a green forwarded run wrongly exits 5.
+    pytester.makeconftest(_NAIVE_CONFTEST)
+    result = pytester.runpytest_inprocess("-p", "no:cacheprovider")
+    assert result.ret == 5
+
+
+def test_finalize_emits_junitxml_from_replayed_reports(pytester, tmp_path):
+    xml = tmp_path / "out.xml"
+    pytester.makeconftest(_REPLAY_CONFTEST)
+    result = pytester.runpytest_inprocess(
+        "-p", "no:cacheprovider", f"--junitxml={xml}"
+    )
+    assert result.ret == 0
+    assert xml.exists()
+    assert "<testcase" in xml.read_text()
 
 
 # ---------------------------------------------------------------------------

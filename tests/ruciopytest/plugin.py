@@ -295,16 +295,19 @@ def pytest_runtestloop(session: pytest.Session) -> object | None:
     :func:`forwarding.run_forwarded_session`, which runs the suite *inside* the
     container, streams per-test reports back to the host (replayed natively so
     each container test surfaces individually -- never a single wrapper), and
-    returns the container's pytest exit code. The host ``session.exitstatus`` is
-    set from the mirrored returncode so codes 2/3/4/5 stay faithful (FWD-05).
+    returns the container's pytest exit code. ``finalize_host_exit`` then raises
+    ``pytest.exit(returncode=...)`` so the host exit status mirrors the container
+    code exactly -- codes 0/1/2/3/4/5 all stay faithful (FWD-05). (A plain
+    ``session.exitstatus = ...`` here would be discarded by pytest's ``_main``.)
 
     FWD-06 (junitxml): no extra code -- the replayed reports flow through the
     host's junitxml plugin (subscribed to ``pytest_runtest_logreport``), so
     ``--junitxml=<host path>`` populates at the host path automatically. Do NOT
     re-add any XML copying here.
 
-    Returns ``True`` to prevent the default pytest test loop from running, or
-    ``None`` to let pytest handle execution normally (in-container/client suite).
+    Returns ``None`` to let pytest handle execution normally (in-container /
+    client suite). On the delegating path it does not return -- ``finalize_host_exit``
+    raises ``pytest.exit`` -- which also prevents the default test loop.
     """
     config = session.config
     if not config.stash.get(delegate_to_container_key, False):
@@ -331,9 +334,13 @@ def pytest_runtestloop(session: pytest.Session) -> object | None:
         root_dir=str(config.rootdir),
         project_name=cm.project_name,
     )
-    session.exitstatus = forwarding.mirror_exit_code(returncode)
-
-    return True  # Prevent default test loop
+    # Make the container's exit code authoritative. pytest's _main() derives the
+    # session exit status from testsfailed/testscollected only -- and host
+    # collection is suppressed (config.args = []), so testscollected == 0 would
+    # otherwise force exit 5 on any all-pass or --co forwarded run. This raises
+    # pytest.exit(returncode=...) so the code mirrors exactly (FWD-05);
+    # sessionfinish/unconfigure still run for junitxml (FWD-06) and teardown.
+    forwarding.finalize_host_exit(session, returncode)
 
 
 def pytest_terminal_summary(terminalreporter, exitstatus, config):
