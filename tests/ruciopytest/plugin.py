@@ -77,6 +77,29 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         dest="dry_run_json",
         help="Output dry-run report as JSON (implies --dry-run)",
     )
+    group.addoption(
+        "--run-in-container",
+        dest="run_in_container",
+        action="store_const",
+        const=True,
+        default=None,
+        help="Force forwarding test execution into the rucio container",
+    )
+    group.addoption(
+        "--no-run-in-container",
+        dest="run_in_container",
+        action="store_const",
+        const=False,
+        help="Force running tests on the host even for container suites (results may be unreliable)",
+    )
+    group.addoption(
+        "--container-env",
+        dest="container_env",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="Set an arbitrary env var inside the container for the forwarded run (repeatable)",
+    )
 
 
 def pytest_configure(config: pytest.Config) -> None:
@@ -140,6 +163,7 @@ def pytest_configure(config: pytest.Config) -> None:
             rdbms=override_rdbms,
             compose_profiles=tuple(sorted(resolved_profiles)),
             xdist_enabled=profile.xdist_enabled,
+            run_in_container=profile.run_in_container,
             default_workers_ci=profile.default_workers_ci,
             default_workers_local=profile.default_workers_local,
             test_paths=profile.test_paths,
@@ -184,6 +208,7 @@ def pytest_configure(config: pytest.Config) -> None:
             rdbms=rdbms_from_infra or matching_suites[0].rdbms,
             compose_profiles=tuple(sorted(resolved_profiles)),
             xdist_enabled=any(s.xdist_enabled for s in matching_suites),
+            run_in_container=any(s.run_in_container for s in matching_suites),
             default_workers_ci=max(s.default_workers_ci for s in matching_suites),
             default_workers_local=matching_suites[0].default_workers_local,
             test_paths=tuple(sorted(all_test_paths)),
@@ -337,6 +362,32 @@ def pytest_unconfigure(config: pytest.Config) -> None:
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
+
+def _should_forward_to_container(config, profile) -> bool:
+    """Resolve whether to forward this run into the container.
+
+    Tri-state CLI override wins; otherwise the profile default. Emits a
+    prominent warning (but does NOT raise) when the user opts out of a
+    suite that normally runs in-container.
+    """
+    override = config.getoption("run_in_container", default=None)
+    decided = override if override is not None else profile.run_in_container
+    if not decided and profile.run_in_container:
+        _warn_host_run_optout(config, profile)
+    return decided
+
+
+def _warn_host_run_optout(config, profile) -> None:
+    msg = (f"WARNING: suite '{profile.name}' normally runs inside the rucio container; "
+           f"running on the host as requested (--no-run-in-container) — results may be unreliable.")
+    reporter = config.pluginmanager.get_plugin("terminalreporter")
+    if reporter is not None:
+        reporter._tw.line()
+        reporter._tw.line(msg, red=True, bold=True)
+        reporter._tw.line()
+    else:
+        print(msg)
 
 
 def _build_inner_pytest_args(argv: list[str]) -> list[str]:
