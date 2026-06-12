@@ -57,7 +57,9 @@ __all__ = [
     "build_inner_pytest_args",
     "make_emitter_from_env",
     "mirror_exit_code",
+    "register_container_stream",
     "replay_report_line",
+    "run_forwarded_session",
 ]
 
 # ---------------------------------------------------------------------------
@@ -186,6 +188,43 @@ def make_emitter_from_env(config: "Config") -> Optional[ReportStreamEmitter]:
     if not path:
         return None
     return ReportStreamEmitter(config, path)
+
+
+class _StreamReportPlugin:
+    """Container-side pytest plugin that emits every report through an emitter.
+
+    Registered (only when stream mode is active) on the in-container pytest's
+    plugin manager so that each ``TestReport`` / ``CollectReport`` is serialized
+    to the JSON-lines stream the host tails. Under xdist this lives on the
+    controller, which receives the worker reports too -- so every test surfaces
+    exactly once on the host (Pitfall 5).
+    """
+
+    def __init__(self, emitter: "ReportStreamEmitter") -> None:
+        self._emitter = emitter
+
+    def pytest_runtest_logreport(self, report) -> None:
+        self._emitter.emit(report)
+
+    def pytest_collectreport(self, report) -> None:
+        self._emitter.emit(report)
+
+
+def register_container_stream(config: "Config") -> bool:
+    """Attach the stream-emitter plugin if :data:`REPORT_STREAM_ENV` is set.
+
+    Called from the container-side ``pytest_configure``. Registers
+    unconditionally (no ``is_worker`` gate) so the xdist controller -- which
+    fires ``pytest_runtest_logreport`` for worker reports -- emits every test's
+    reports. Stores the emitter on ``config._rucio_forward_emitter`` so
+    ``pytest_unconfigure`` can close it. Returns ``True`` when registered.
+    """
+    emitter = make_emitter_from_env(config)
+    if emitter is None:
+        return False
+    config.pluginmanager.register(_StreamReportPlugin(emitter), "rucio_forward_stream")
+    config._rucio_forward_emitter = emitter  # closed at unconfigure
+    return True
 
 
 # ---------------------------------------------------------------------------

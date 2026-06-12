@@ -248,6 +248,11 @@ def pytest_configure(config: pytest.Config) -> None:
                 manager = InfraManager(profile, keep_db=keep_db)
                 manager.setup()
 
+            # If the host launched us with RUCIO_FORWARD_STREAM set, attach the
+            # report-stream emitter so each in-container report is mirrored back.
+            from . import forwarding
+            forwarding.register_container_stream(config)
+
         elif profile.compose_profiles:
             # On host: start containers and delegate test execution
             # Set RDBMS so the container entrypoint generates the right config
@@ -353,7 +358,11 @@ def pytest_terminal_summary(terminalreporter, exitstatus, config):
 
 
 def pytest_unconfigure(config: pytest.Config) -> None:
-    """Stop containers on session end."""
+    """Stop containers on session end and close any forward-stream emitter."""
+    emitter = getattr(config, "_rucio_forward_emitter", None)
+    if emitter is not None:
+        emitter.close()
+
     cm = config.stash.get(container_manager_key, None)
     if cm is not None:
         cm.stop(capture_logs=True)
