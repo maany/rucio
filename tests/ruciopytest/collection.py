@@ -296,9 +296,23 @@ def _print_dry_run_report(
     """Print infrastructure plan and test collection summary, then exit.
 
     Only runs when ``--dry-run`` is active.
+
+    When forwarding is active, ``--dry-run``/``--co`` are forwarded into the
+    container; the host does not produce its own dry-run report (Phase 6 /
+    FWD-11). The in-container forwarded run has no delegate flag set, so it still
+    prints + exits authoritatively inside the container, and that output is
+    streamed/replayed to the host.
     """
     if not config.getoption("dry_run", default=False):
         return
+
+    # Defensive: when delegating to the container the host does not own the real
+    # collection, so it must never print a host-side dry-run report or raise the
+    # early pytest.exit. (pytest_collection_modifyitems already early-returns when
+    # delegating, so this is normally unreachable on the host — guard explicitly
+    # against future call-path changes.)
+    if config.stash.get(delegate_to_container_key, False):
+        return  # forwarded dry-run: the in-container pytest produces the authoritative report
 
     report: dict = {
         "infrastructure": {
