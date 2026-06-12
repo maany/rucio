@@ -15,7 +15,6 @@
 from __future__ import annotations
 
 import os
-import subprocess
 import sys
 
 import pytest
@@ -274,38 +273,49 @@ def pytest_configure(config: pytest.Config) -> None:
 
 
 def pytest_runtestloop(session: pytest.Session) -> object | None:
-    """Delegate test execution to the rucio container when running on the host.
+    """Forward test execution into the rucio container with 1:1 result mirroring.
 
-    When ``delegate_to_container_key`` is set, this hook builds a pytest
-    command from the original CLI arguments and runs it inside the rucio
-    container via ``docker compose exec``.  Output is streamed in real time.
+    When ``delegate_to_container_key`` is set, delegate the whole run to
+    :func:`forwarding.run_forwarded_session`, which runs the suite *inside* the
+    container, streams per-test reports back to the host (replayed natively so
+    each container test surfaces individually -- never a single wrapper), and
+    returns the container's pytest exit code. The host ``session.exitstatus`` is
+    set from the mirrored returncode so codes 2/3/4/5 stay faithful (FWD-05).
 
-    Returns ``True`` to prevent the default pytest test loop from running.
-    Returns ``None`` to let pytest handle execution normally (in-container
-    or client suite).
+    FWD-06 (junitxml): no extra code -- the replayed reports flow through the
+    host's junitxml plugin (subscribed to ``pytest_runtest_logreport``), so
+    ``--junitxml=<host path>`` populates at the host path automatically. Do NOT
+    re-add any XML copying here.
+
+    Returns ``True`` to prevent the default pytest test loop from running, or
+    ``None`` to let pytest handle execution normally (in-container/client suite).
     """
     config = session.config
     if not config.stash.get(delegate_to_container_key, False):
         return None  # Normal execution
 
     cm = config.stash[container_manager_key]
+    container_env = config.getoption("container_env", default=[])
+    interactive = (
+        bool(config.getoption("usepdb", default=False))
+        or any(
+            a in ("--pdb", "--trace") or a.startswith("--pdbcls")
+            for a in sys.argv[1:]
+        )
+    )
 
-    # Build the inner pytest command from original CLI args
-    inner_args = _build_inner_pytest_args(sys.argv[1:])
-    cmd = cm._compose_cmd("exec", "-T", "-w", "/rucio_source", "rucio",
-                          "python", "-m", "pytest", *inner_args)
+    from . import forwarding
 
-    print(f"\n[plugin] Delegating test execution to container")
-    print(f"[plugin] Running: pytest {' '.join(inner_args)}\n")
-
-    result = subprocess.run(cmd)
-
-    if result.returncode != 0:
-        session.testsfailed = 1
-    else:
-        # Mark at least one test as collected/passed so pytest doesn't
-        # exit with code 5 ("no tests collected").
-        session.testscollected = 1
+    print("\n[plugin] Forwarding test execution into the rucio container "
+          "(1:1 result mirroring)\n")
+    returncode = forwarding.run_forwarded_session(
+        session, cm,
+        container_env=container_env,
+        interactive=interactive,
+        root_dir=str(config.rootdir),
+        project_name=cm.project_name,
+    )
+    session.exitstatus = forwarding.mirror_exit_code(returncode)
 
     return True  # Prevent default test loop
 
@@ -397,16 +407,6 @@ def _warn_host_run_optout(config, profile) -> None:
         reporter._tw.line()
     else:
         print(msg)
-
-
-def _build_inner_pytest_args(argv: list[str]) -> list[str]:
-    """Filter CLI args for the inner pytest session inside the container.
-
-    Passes through all arguments as-is.  The inner container has the same
-    plugin registered, so ``--suite``, ``--keep-db``, ``--xdist-workers``,
-    markers, test paths, ``-k``, ``-x``, ``-v``, etc. all work.
-    """
-    return list(argv)
 
 
 def _print_profile_summary(config: pytest.Config, profile: SuiteProfile) -> None:
