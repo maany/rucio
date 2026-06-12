@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: completed
-stopped_at: Completed 05-01-PLAN.md
-last_updated: "2026-03-13T12:04:35.520Z"
+stopped_at: Completed 06-03-PLAN.md
+last_updated: "2026-06-12T10:42:47.925Z"
 last_activity: 2026-03-09 -- Completed 03-03-PLAN.md
 progress:
   total_phases: 6
   completed_phases: 5
-  total_plans: 11
-  completed_plans: 11
+  total_plans: 15
+  completed_plans: 14
   percent: 70
 ---
 
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Running any test suite should be a single `pytest` command with arguments -- no shell scripts, no matrix parsers, no manual container management.
-**Current focus:** Phase 3 complete. Ready for Phase 4.
+**Current focus:** Phase 6 forwarder live (Plan 03 complete). Plan 04 (dry-run reconciliation) next.
 
 ## Current Position
 
-Phase: 3 of 5 (Container Lifecycle and Cleanup) -- COMPLETE
-Plan: 3 of 3 in current phase (all complete)
-Status: Phase 3 complete (including UAT gap closure)
-Last activity: 2026-03-09 -- Completed 03-03-PLAN.md
+Phase: 6 of 6 (Host pytest with optional --run-in-container forwarding) -- IN PROGRESS
+Plan: 3 of 4 in current phase (06-01, 06-02, 06-03 complete)
+Status: Forwarder wired end-to-end; --co/--dry-run reconciliation (06-04) remaining
+Last activity: 2026-06-12 -- Completed 06-03-PLAN.md
 
-Progress: [#######...] 70%
+Progress: [█████████░] 93%
 
 ## Performance Metrics
 
@@ -61,6 +61,9 @@ Progress: [#######...] 70%
 | Phase 04 P02 | 2min | 2 tasks | 3 files |
 | Phase 05 P02 | 1min | 2 tasks | 1 files |
 | Phase 05 P01 | 2min | 2 tasks | 2 files |
+| Phase 6 P1 | 4min | 2 tasks | 2 files |
+| Phase 6 P2 | 7min | 2 tasks | 2 files |
+| Phase 06 P03 | 3min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -101,6 +104,9 @@ Recent decisions affecting current work:
 - [Phase 05]: Copied python_annotations from autotest.yml (ruff) not code-quality.yml (flake8) for lint.yml
 - [Phase 05]: Reused pinned action hashes from runtime_images.yml for CI workflow consistency
 - [Phase 05]: No backward-compatibility shims for removed lifecycle fixtures; InfraManager handles all lifecycle
+- [Phase 06]: 06-03: register_container_stream attaches unconditionally so xdist controller emits every worker report once
+- [Phase 06]: 06-03: missing bind mount is a hard UsageError (no copy fallback); image staleness only warns
+- [Phase 06]: 06-03: host reads results only from mounted JSONL (inherited pipe) to avoid double-draining
 
 ### Pending Todos
 
@@ -118,6 +124,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-13T12:04:35.517Z
-Stopped at: Completed 05-01-PLAN.md
+Last session: 2026-06-12T10:42:38.636Z
+Stopped at: Completed 06-03-PLAN.md
 Resume file: None
