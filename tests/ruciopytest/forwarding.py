@@ -42,8 +42,13 @@ so the calls below pass ``config=...`` explicitly.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+import subprocess
+import sys
+import time
+from pathlib import Path
 from typing import TYPE_CHECKING, Iterable, List, Mapping, Optional
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
@@ -271,3 +276,171 @@ def mirror_exit_code(returncode: int) -> int:
     the result to ``session.exitstatus`` and/or pass it to ``pytest.exit``.
     """
     return int(returncode)
+
+
+# ---------------------------------------------------------------------------
+# host orchestration (Docker-coupled)
+# ---------------------------------------------------------------------------
+
+# Bind-mount target inside the rucio dev container (etc/docker/dev compose).
+_CONTAINER_SOURCE_DIR = "/rucio_source"
+# Host-relative scratch dir (also visible in-container under the bind mount).
+_FORWARD_SCRATCH_DIRNAME = ".test-forward"
+# Requirements file used for the best-effort staleness check.
+_STALENESS_REQUIREMENTS = "requirements/requirements.dev.txt"
+# Tail polling interval while the inner pytest is running.
+_TAIL_POLL_SECONDS = 0.02
+
+
+def _short_hash(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()[:12]
+
+
+def _check_bind_mount(cm) -> None:
+    """Raise ``pytest.UsageError`` if the repo is not bind-mounted in the container.
+
+    No copy fallback -- forwarding requires the live source mount so that the
+    JSON-lines stream the container writes is visible on the host (FWD-09).
+    """
+    import pytest
+
+    cmd = cm._compose_cmd("exec", "-T", "rucio", "test", "-d", _CONTAINER_SOURCE_DIR)
+    result = subprocess.run(cmd, capture_output=True)
+    if result.returncode != 0:
+        raise pytest.UsageError(
+            "rucio source is not bind-mounted at /rucio_source in the container; "
+            "cannot forward -- check the dev compose mount"
+        )
+
+
+def _warn_if_stale(cm, root_dir: str) -> None:
+    """Best-effort staleness warning (FWD-12): compare dev-requirements hashes.
+
+    Any failure is a silent skip -- this must never raise or block forwarding.
+    """
+    try:
+        host_path = Path(root_dir) / _STALENESS_REQUIREMENTS
+        host_hash = _short_hash(host_path.read_bytes())
+
+        cmd = cm._compose_cmd(
+            "exec", "-T", "rucio", "cat", f"{_CONTAINER_SOURCE_DIR}/{_STALENESS_REQUIREMENTS}"
+        )
+        result = subprocess.run(cmd, capture_output=True)
+        if result.returncode != 0:
+            return
+        container_hash = _short_hash(result.stdout)
+
+        if host_hash != container_hash:
+            # ANSI yellow; degrade gracefully if the terminal ignores it.
+            print(
+                "\033[33mWARNING: container image may be stale -- host "
+                f"{_STALENESS_REQUIREMENTS} differs from the container copy "
+                "(host={} vs container={}). Rebuild the dev image if tests "
+                "behave unexpectedly.\033[0m".format(host_hash, container_hash)
+            )
+    except Exception:  # noqa: BLE001 - staleness check is strictly best-effort
+        return
+
+
+def _drain_stream(session: "Session", fh) -> None:
+    """Replay every complete line currently available on ``fh``."""
+    while True:
+        line = fh.readline()
+        if not line:
+            break
+        if line.endswith("\n"):
+            replay_report_line(session, line)
+        else:
+            # Partial line: rewind so we re-read it once it's complete.
+            fh.seek(fh.tell() - len(line))
+            break
+
+
+def run_forwarded_session(
+    session: "Session",
+    cm,
+    *,
+    container_env: Iterable[str],
+    interactive: bool,
+    root_dir: str,
+    project_name: str,
+) -> int:
+    """Run the host's pytest session inside the rucio container, 1:1.
+
+    Orchestrates the Docker-coupled half of the forwarder:
+
+    1. Verify the repo bind mount exists (raises ``pytest.UsageError`` if not).
+    2. Best-effort staleness warning comparing dev-requirements hashes.
+    3. Interactive runs (``--pdb``/``--trace``) go through ``docker compose
+       exec -it`` raw TTY passthrough -- no result stream.
+    4. Default runs stream JSON-lines reports through a host-visible mounted
+       file, replaying each report so N container tests surface as N host
+       reports, then mirror the container exit code.
+    5. First Ctrl+C forwards a graceful interrupt into the container and keeps
+       draining; second Ctrl+C hard-kills. Teardown is left to the caller
+       (Phase 3 ``ContainerManager.stop``).
+    """
+    _check_bind_mount(cm)
+    _warn_if_stale(cm, root_dir)
+
+    inner_args = build_inner_pytest_args(sys.argv[1:])
+    env_flags = build_env_flags(os.environ, container_env)
+
+    # --- interactive branch: raw TTY passthrough, no stream (FWD-08) ---------
+    if interactive:
+        cmd = cm._compose_cmd(
+            "exec", "-it", *env_flags, "-w", _CONTAINER_SOURCE_DIR,
+            "rucio", "python", "-m", "pytest", *inner_args,
+        )
+        return mirror_exit_code(subprocess.run(cmd).returncode)
+
+    # --- stream branch: tail the mounted JSON-lines file (FWD-04/05) ---------
+    stream_dir = Path(root_dir) / _FORWARD_SCRATCH_DIRNAME
+    stream_dir.mkdir(parents=True, exist_ok=True)
+    stream_file = stream_dir / f"{project_name}.jsonl"
+    # Truncate/create empty so we only see this run's reports.
+    stream_file.write_text("", encoding="utf-8")
+
+    container_stream_path = (
+        f"{_CONTAINER_SOURCE_DIR}/{_FORWARD_SCRATCH_DIRNAME}/{project_name}.jsonl"
+    )
+    env_flags = list(env_flags) + ["-e", f"{REPORT_STREAM_ENV}={container_stream_path}"]
+
+    cmd = cm._compose_cmd(
+        "exec", "-T", *env_flags, "-w", _CONTAINER_SOURCE_DIR,
+        "rucio", "python", "-m", "pytest", *inner_args,
+    )
+
+    # Inherit stdout/stderr so human-readable pytest chatter still shows; we read
+    # results only from the mounted file (Pitfall 4 -- never also drain the pipe).
+    proc = subprocess.Popen(cmd)
+
+    returncode: int
+    with open(stream_file, "r", encoding="utf-8") as fh:
+        try:
+            # First-level wait: graceful on the first Ctrl+C.
+            while proc.poll() is None:
+                _drain_stream(session, fh)
+                time.sleep(_TAIL_POLL_SECONDS)
+            _drain_stream(session, fh)
+            returncode = proc.returncode
+        except KeyboardInterrupt:
+            # First Ctrl+C: forward a graceful interrupt into the container.
+            try:
+                subprocess.run(
+                    cm._compose_cmd(
+                        "exec", "-T", "rucio", "pkill", "-INT", "-f", "python -m pytest"
+                    ),
+                    capture_output=True,
+                )
+                while proc.poll() is None:
+                    _drain_stream(session, fh)
+                    time.sleep(_TAIL_POLL_SECONDS)
+                _drain_stream(session, fh)
+            except KeyboardInterrupt:
+                # Second Ctrl+C: hard kill.
+                proc.kill()
+                _drain_stream(session, fh)
+            returncode = 2
+
+    return mirror_exit_code(returncode)
