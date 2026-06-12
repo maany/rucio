@@ -109,6 +109,7 @@ Recent decisions affecting current work:
 - [Phase 06]: 06-03: missing bind mount is a hard UsageError (no copy fallback); image staleness only warns
 - [Phase 06]: 06-03: host reads results only from mounted JSONL (inherited pipe) to avoid double-draining
 - [Phase 06]: 06-04: forwarding_applies computed once (single _should_forward_to_container call) reused by dry-run guard and delegation; --dry-run/--co forward into the container for container suites, host suites keep the fast early-exit
+- [Phase 06 gap, live-found]: Forwarded host exit code MUST be applied via pytest.exit(returncode=...), not session.exitstatus — pytest _main() overwrites exitstatus from testsfailed/testscollected, and host collection is suppressed (config.args=[]) so testscollected is always 0; all-pass/--co runs wrongly exited 5. finalize_host_exit() fixes FWD-05. Live-verified: --co EXIT=0 (was 5), 29/29 unit tests. Commit 23319a643
 
 ### Pending Todos
 
