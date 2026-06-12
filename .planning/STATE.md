@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: completed
-stopped_at: Completed 06-03-PLAN.md
-last_updated: "2026-06-12T10:42:47.925Z"
-last_activity: 2026-03-09 -- Completed 03-03-PLAN.md
+stopped_at: Completed 06-04-PLAN.md
+last_updated: "2026-06-12T10:47:19.809Z"
+last_activity: 2026-06-12 -- Completed 06-04-PLAN.md
 progress:
   total_phases: 6
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 15
-  completed_plans: 14
-  percent: 70
+  completed_plans: 15
+  percent: 100
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Running any test suite should be a single `pytest` command with arguments -- no shell scripts, no matrix parsers, no manual container management.
-**Current focus:** Phase 6 forwarder live (Plan 03 complete). Plan 04 (dry-run reconciliation) next.
+**Current focus:** Phase 6 complete. All 4 plans done; forwarder live with dry-run/--co reconciliation (FWD-11).
 
 ## Current Position
 
-Phase: 6 of 6 (Host pytest with optional --run-in-container forwarding) -- IN PROGRESS
-Plan: 3 of 4 in current phase (06-01, 06-02, 06-03 complete)
-Status: Forwarder wired end-to-end; --co/--dry-run reconciliation (06-04) remaining
-Last activity: 2026-06-12 -- Completed 06-03-PLAN.md
+Phase: 6 of 6 (Host pytest with optional --run-in-container forwarding) -- COMPLETE
+Plan: 4 of 4 in current phase (06-01, 06-02, 06-03, 06-04 complete)
+Status: Phase 6 complete -- forwarder live; --co/--dry-run forward into the container for container suites, host suites keep the fast early-exit
+Last activity: 2026-06-12 -- Completed 06-04-PLAN.md
 
-Progress: [█████████░] 93%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -64,6 +64,7 @@ Progress: [█████████░] 93%
 | Phase 6 P1 | 4min | 2 tasks | 2 files |
 | Phase 6 P2 | 7min | 2 tasks | 2 files |
 | Phase 06 P03 | 3min | 3 tasks | 3 files |
+| Phase 06 P04 | 2min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -107,6 +108,7 @@ Recent decisions affecting current work:
 - [Phase 06]: 06-03: register_container_stream attaches unconditionally so xdist controller emits every worker report once
 - [Phase 06]: 06-03: missing bind mount is a hard UsageError (no copy fallback); image staleness only warns
 - [Phase 06]: 06-03: host reads results only from mounted JSONL (inherited pipe) to avoid double-draining
+- [Phase 06]: 06-04: forwarding_applies computed once (single _should_forward_to_container call) reused by dry-run guard and delegation; --dry-run/--co forward into the container for container suites, host suites keep the fast early-exit
 
 ### Pending Todos
 
@@ -124,6 +126,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-12T10:42:38.636Z
-Stopped at: Completed 06-03-PLAN.md
+Last session: 2026-06-12T10:47:19.806Z
+Stopped at: Completed 06-04-PLAN.md
 Resume file: None

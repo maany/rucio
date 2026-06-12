@@ -117,10 +117,10 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 **Goal:** A developer runs `pytest --suite=<name>` on the host and the plugin transparently forwards execution into the rucio container, mirroring each container test 1:1 on the host (native rendering, exact exit code, host-path junitxml) with guaranteed container teardown — replacing the naive single-wrapper delegation.
 **Requirements**: FWD-01, FWD-02, FWD-03, FWD-04, FWD-05, FWD-06, FWD-07, FWD-08, FWD-09, FWD-10, FWD-11, FWD-12
 **Depends on:** Phase 5
-**Plans:** 2/4 plans executed
+**Plans:** 4/4 plans executed
 
 Plans:
-- [ ] 06-01-PLAN.md — Per-suite run_in_container field, --run-in-container/--no-run-in-container/--container-env options, opt-out warning + trigger helper
-- [ ] 06-02-PLAN.md — Dependency-free transport core (forwarding.py): serialize→JSON-lines→replay 1:1, argv filter, exit mirror, env flags (TDD)
-- [ ] 06-03-PLAN.md — Wire forwarder into plugin.py: replace naive delegation, container-side stream emitter, mount check, staleness warning, --pdb TTY branch, interrupt handling
-- [ ] 06-04-PLAN.md — Reconcile --co/--dry-run forwarding with Phase 4 early-exit (plugin.py + collection.py)
+- [x] 06-01-PLAN.md — Per-suite run_in_container field, --run-in-container/--no-run-in-container/--container-env options, opt-out warning + trigger helper
+- [x] 06-02-PLAN.md — Dependency-free transport core (forwarding.py): serialize→JSON-lines→replay 1:1, argv filter, exit mirror, env flags (TDD)
+- [x] 06-03-PLAN.md — Wire forwarder into plugin.py: replace naive delegation, container-side stream emitter, mount check, staleness warning, --pdb TTY branch, interrupt handling
+- [x] 06-04-PLAN.md — Reconcile --co/--dry-run forwarding with Phase 4 early-exit (plugin.py + collection.py)
