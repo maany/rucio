@@ -27,9 +27,11 @@ Both accept ``config=`` as a keyword, so forwarding.py calls them with config=..
 from __future__ import annotations
 
 import json
+import types
 
 import pytest
 
+from tests.ruciopytest import forwarding
 from tests.ruciopytest.forwarding import (
     REPORT_STREAM_ENV,
     ReportStreamEmitter,
@@ -423,3 +425,167 @@ def test_emitter_writes_one_json_object_per_report(call_reports, tmp_path):
     for ln in lines:
         obj = json.loads(ln)  # each line is a standalone JSON object
         assert "$report_type" in obj
+
+
+# ---------------------------------------------------------------------------
+# Docker-coupled branches: mount check (FWD-09), staleness (FWD-12),
+# interactive TTY passthrough (FWD-08). subprocess is monkeypatched, so these
+# stay daemon-free while still exercising the real control flow.
+# ---------------------------------------------------------------------------
+
+class _FakeCM:
+    """Records _compose_cmd(...) calls; returns a plain command list."""
+
+    project_name = "rucio-test-fake"
+
+    def __init__(self):
+        self.calls = []
+
+    def _compose_cmd(self, *args):
+        self.calls.append(tuple(args))
+        return ["docker", "compose", *args]
+
+
+def _run_result(returncode=0, stdout=b""):
+    return types.SimpleNamespace(returncode=returncode, stdout=stdout, stderr=b"")
+
+
+def test_check_bind_mount_raises_usageerror_when_missing(monkeypatch):
+    cm = _FakeCM()
+    monkeypatch.setattr(forwarding.subprocess, "run",
+                        lambda cmd, **kw: _run_result(returncode=1))
+    with pytest.raises(pytest.UsageError):
+        forwarding._check_bind_mount(cm)
+    # It probed the container source dir.
+    assert any("test" in c and forwarding._CONTAINER_SOURCE_DIR in c for c in cm.calls)
+
+
+def test_check_bind_mount_ok_when_present(monkeypatch):
+    cm = _FakeCM()
+    monkeypatch.setattr(forwarding.subprocess, "run",
+                        lambda cmd, **kw: _run_result(returncode=0))
+    forwarding._check_bind_mount(cm)  # must not raise
+
+
+def test_warn_if_stale_warns_on_hash_mismatch(monkeypatch, capsys, tmp_path):
+    (tmp_path / "requirements").mkdir()
+    (tmp_path / "requirements" / "requirements.dev.txt").write_bytes(b"host-content")
+    cm = _FakeCM()
+    monkeypatch.setattr(forwarding.subprocess, "run",
+                        lambda cmd, **kw: _run_result(returncode=0, stdout=b"container-content"))
+    forwarding._warn_if_stale(cm, str(tmp_path))
+    assert "stale" in capsys.readouterr().out.lower()
+
+
+def test_warn_if_stale_silent_when_hashes_match(monkeypatch, capsys, tmp_path):
+    (tmp_path / "requirements").mkdir()
+    (tmp_path / "requirements" / "requirements.dev.txt").write_bytes(b"identical")
+    cm = _FakeCM()
+    monkeypatch.setattr(forwarding.subprocess, "run",
+                        lambda cmd, **kw: _run_result(returncode=0, stdout=b"identical"))
+    forwarding._warn_if_stale(cm, str(tmp_path))
+    assert "stale" not in capsys.readouterr().out.lower()
+
+
+def test_warn_if_stale_never_raises(monkeypatch, tmp_path):
+    # Both the host read (file absent) and the container call blow up -> swallowed.
+    cm = _FakeCM()
+
+    def boom(*a, **k):
+        raise OSError("docker daemon gone")
+
+    monkeypatch.setattr(forwarding.subprocess, "run", boom)
+    forwarding._warn_if_stale(cm, str(tmp_path))  # must not raise
+
+
+def test_run_forwarded_session_interactive_uses_tty_and_no_stream(monkeypatch, tmp_path):
+    cm = _FakeCM()
+    monkeypatch.setattr(forwarding, "_check_bind_mount", lambda cm: None)
+    monkeypatch.setattr(forwarding, "_warn_if_stale", lambda cm, root: None)
+    monkeypatch.setattr(forwarding.subprocess, "run",
+                        lambda cmd, **kw: _run_result(returncode=0))
+    # Popen must never be used on the interactive path.
+    monkeypatch.setattr(forwarding.subprocess, "Popen",
+                        lambda *a, **k: pytest.fail("interactive path must not Popen"))
+
+    session = types.SimpleNamespace(config=None)
+    rc = forwarding.run_forwarded_session(
+        session, cm, container_env=[], interactive=True,
+        root_dir=str(tmp_path), project_name="proj",
+    )
+
+    assert rc == 0
+    # exec -it (TTY) was requested...
+    assert any("-it" in c for c in cm.calls)
+    # ...and no JSON-lines scratch dir was created (no result stream).
+    assert not (tmp_path / forwarding._FORWARD_SCRATCH_DIRNAME).exists()
+
+
+def _prep_stream_session(monkeypatch, cm):
+    """Common stream-branch monkeypatching: mount/staleness no-op."""
+    monkeypatch.setattr(forwarding, "_check_bind_mount", lambda cm: None)
+    monkeypatch.setattr(forwarding, "_warn_if_stale", lambda cm, root: None)
+
+
+def test_first_ctrl_c_forwards_graceful_interrupt_and_mirrors_2(monkeypatch, tmp_path):
+    cm = _FakeCM()
+    _prep_stream_session(monkeypatch, cm)
+
+    class _Proc:
+        def __init__(self):
+            self._polls = 0
+            self.returncode = None
+
+        def poll(self):
+            self._polls += 1
+            if self._polls == 1:
+                raise KeyboardInterrupt  # Ctrl+C during the first wait
+            self.returncode = 2
+            return 2  # after pkill, process has ended
+
+        def kill(self):  # pragma: no cover - not reached on single Ctrl+C
+            raise AssertionError("single Ctrl+C must not hard-kill")
+
+    monkeypatch.setattr(forwarding.subprocess, "Popen", lambda *a, **k: _Proc())
+    monkeypatch.setattr(forwarding.subprocess, "run",
+                        lambda cmd, **kw: _run_result(returncode=0))
+
+    session = types.SimpleNamespace(config=None)
+    rc = forwarding.run_forwarded_session(
+        session, cm, container_env=[], interactive=False,
+        root_dir=str(tmp_path), project_name="proj",
+    )
+
+    assert rc == 2  # interrupted, mirrored
+    # A graceful SIGINT was forwarded into the container.
+    assert any("pkill" in c and "-INT" in c for c in cm.calls)
+
+
+def test_second_ctrl_c_hard_kills_and_mirrors_2(monkeypatch, tmp_path):
+    cm = _FakeCM()
+    _prep_stream_session(monkeypatch, cm)
+
+    class _Proc:
+        def __init__(self):
+            self.killed = False
+            self.returncode = None
+
+        def poll(self):
+            raise KeyboardInterrupt  # Ctrl+C on both the first and second waits
+
+        def kill(self):
+            self.killed = True
+
+    proc = _Proc()
+    monkeypatch.setattr(forwarding.subprocess, "Popen", lambda *a, **k: proc)
+    monkeypatch.setattr(forwarding.subprocess, "run",
+                        lambda cmd, **kw: _run_result(returncode=0))
+
+    session = types.SimpleNamespace(config=None)
+    rc = forwarding.run_forwarded_session(
+        session, cm, container_env=[], interactive=False,
+        root_dir=str(tmp_path), project_name="proj",
+    )
+
+    assert rc == 2
+    assert proc.killed is True  # second Ctrl+C escalated to a hard kill
