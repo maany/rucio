@@ -393,6 +393,7 @@ def run_forwarded_session(
     interactive: bool,
     root_dir: str,
     project_name: str,
+    collect_only: bool = False,
 ) -> int:
     """Run the host's pytest session inside the rucio container, 1:1.
 
@@ -408,6 +409,13 @@ def run_forwarded_session(
     5. First Ctrl+C forwards a graceful interrupt into the container and keeps
        draining; second Ctrl+C hard-kills. Teardown is left to the caller
        (Phase 3 ``ContainerManager.stop``).
+
+    Terminal rendering (avoid double output): during **execution** the host
+    replays reports through its own terminalreporter, so the container's
+    identical pytest rendering is captured to a log file instead of inherited to
+    the terminal. During **collect-only** the host has no items of its own to
+    list, so the container's stdout (its collected-test listing) is inherited to
+    the terminal -- it is the only place that listing is rendered.
     """
     _check_bind_mount(cm)
     _warn_if_stale(cm, root_dir)
@@ -440,36 +448,52 @@ def run_forwarded_session(
         "rucio", "python", "-m", "pytest", *inner_args,
     )
 
-    # Inherit stdout/stderr so human-readable pytest chatter still shows; we read
-    # results only from the mounted file (Pitfall 4 -- never also drain the pipe).
-    proc = subprocess.Popen(cmd)
+    # Choose who renders to the terminal (see docstring). We always read results
+    # only from the mounted file (Pitfall 4 -- never also drain the pipe).
+    container_stdout_fh = None
+    if collect_only:
+        # Container is the sole renderer of the collected listing -> inherit.
+        proc = subprocess.Popen(cmd)
+    else:
+        # Host replays + renders live; capture the container's duplicate pytest
+        # rendering to a log file rather than echoing it to the terminal.
+        container_log = stream_dir / f"{project_name}.container-stdout.log"
+        container_stdout_fh = open(container_log, "w", encoding="utf-8")
+        print(f"[plugin] container pytest output -> {container_log}")
+        proc = subprocess.Popen(
+            cmd, stdout=container_stdout_fh, stderr=subprocess.STDOUT
+        )
 
-    returncode: int
-    with open(stream_file, "r", encoding="utf-8") as fh:
-        try:
-            # First-level wait: graceful on the first Ctrl+C.
-            while proc.poll() is None:
-                _drain_stream(session, fh)
-                time.sleep(_TAIL_POLL_SECONDS)
-            _drain_stream(session, fh)
-            returncode = proc.returncode
-        except KeyboardInterrupt:
-            # First Ctrl+C: forward a graceful interrupt into the container.
+    try:
+        returncode: int
+        with open(stream_file, "r", encoding="utf-8") as fh:
             try:
-                subprocess.run(
-                    cm._compose_cmd(
-                        "exec", "-T", "rucio", "pkill", "-INT", "-f", "python -m pytest"
-                    ),
-                    capture_output=True,
-                )
+                # First-level wait: graceful on the first Ctrl+C.
                 while proc.poll() is None:
                     _drain_stream(session, fh)
                     time.sleep(_TAIL_POLL_SECONDS)
                 _drain_stream(session, fh)
+                returncode = proc.returncode
             except KeyboardInterrupt:
-                # Second Ctrl+C: hard kill.
-                proc.kill()
-                _drain_stream(session, fh)
-            returncode = 2
+                # First Ctrl+C: forward a graceful interrupt into the container.
+                try:
+                    subprocess.run(
+                        cm._compose_cmd(
+                            "exec", "-T", "rucio", "pkill", "-INT", "-f", "python -m pytest"
+                        ),
+                        capture_output=True,
+                    )
+                    while proc.poll() is None:
+                        _drain_stream(session, fh)
+                        time.sleep(_TAIL_POLL_SECONDS)
+                    _drain_stream(session, fh)
+                except KeyboardInterrupt:
+                    # Second Ctrl+C: hard kill.
+                    proc.kill()
+                    _drain_stream(session, fh)
+                returncode = 2
+    finally:
+        if container_stdout_fh is not None:
+            container_stdout_fh.close()
 
     return mirror_exit_code(returncode)

@@ -333,6 +333,7 @@ def pytest_runtestloop(session: pytest.Session) -> object | None:
         interactive=interactive,
         root_dir=str(config.rootdir),
         project_name=cm.project_name,
+        collect_only=bool(config.getoption("collectonly", default=False)),
     )
     # Make the container's exit code authoritative. pytest's _main() derives the
     # session exit status from testsfailed/testscollected only -- and host

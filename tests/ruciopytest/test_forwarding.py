@@ -589,3 +589,63 @@ def test_second_ctrl_c_hard_kills_and_mirrors_2(monkeypatch, tmp_path):
 
     assert rc == 2
     assert proc.killed is True  # second Ctrl+C escalated to a hard kill
+
+
+def test_execution_mode_captures_container_stdout_to_log_not_terminal(monkeypatch, tmp_path):
+    cm = _FakeCM()
+    _prep_stream_session(monkeypatch, cm)
+    popen_kwargs = {}
+
+    class _Proc:
+        returncode = 0
+
+        def poll(self):
+            return 0
+
+    def fake_popen(cmd, **kw):
+        popen_kwargs.update(kw)
+        return _Proc()
+
+    monkeypatch.setattr(forwarding.subprocess, "Popen", fake_popen)
+
+    session = types.SimpleNamespace(config=None)
+    rc = forwarding.run_forwarded_session(
+        session, cm, container_env=[], interactive=False, collect_only=False,
+        root_dir=str(tmp_path), project_name="proj",
+    )
+
+    assert rc == 0
+    # Execution mode redirects the container's stdout away from the terminal...
+    assert popen_kwargs.get("stdout") is not None
+    assert popen_kwargs.get("stderr") == forwarding.subprocess.STDOUT
+    # ...into a per-run log file.
+    assert (tmp_path / forwarding._FORWARD_SCRATCH_DIRNAME / "proj.container-stdout.log").exists()
+
+
+def test_collect_only_mode_inherits_container_stdout(monkeypatch, tmp_path):
+    cm = _FakeCM()
+    _prep_stream_session(monkeypatch, cm)
+    popen_kwargs = {}
+
+    class _Proc:
+        returncode = 0
+
+        def poll(self):
+            return 0
+
+    def fake_popen(cmd, **kw):
+        popen_kwargs.update(kw)
+        return _Proc()
+
+    monkeypatch.setattr(forwarding.subprocess, "Popen", fake_popen)
+
+    session = types.SimpleNamespace(config=None)
+    rc = forwarding.run_forwarded_session(
+        session, cm, container_env=[], interactive=False, collect_only=True,
+        root_dir=str(tmp_path), project_name="proj",
+    )
+
+    assert rc == 0
+    # --co inherits the container's stdout (its listing is the only render).
+    assert popen_kwargs.get("stdout") is None
+    assert not (tmp_path / forwarding._FORWARD_SCRATCH_DIRNAME / "proj.container-stdout.log").exists()
