@@ -1,17 +1,14 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
-status: completed
-stopped_at: Phase 6 verified (passed) after live verification + gap fix
-last_updated: "2026-06-13T00:00:00.000Z"
-last_activity: 2026-06-13 -- Phase 6 live-verified: exit-code gap fixed (23319a643), all live-UAT items closed (e4eedd716), 06-VERIFICATION status=passed
+milestone: v1.1
+milestone_name: Productionize & Merge
+status: planning
+last_updated: "2026-06-15T17:30:00.000Z"
 progress:
   total_phases: 6
   completed_phases: 6
   total_plans: 15
   completed_plans: 15
-  percent: 100
 ---
 
 # Project State
@@ -21,16 +18,17 @@ progress:
 See: .planning/PROJECT.md (updated 2026-02-20)
 
 **Core value:** Running any test suite should be a single `pytest` command with arguments -- no shell scripts, no matrix parsers, no manual container management.
-**Current focus:** Phase 6 complete. All 4 plans done; forwarder live with dry-run/--co reconciliation (FWD-11).
+**Current focus:** v1.1 Productionize & Merge -- Phase 7 (suite-filtering parity) next.
 
 ## Current Position
 
-Phase: 6 of 6 (Host pytest with optional --run-in-container forwarding) -- COMPLETE
-Plan: 4 of 4 in current phase (06-01, 06-02, 06-03, 06-04 complete)
-Status: Phase 6 complete -- forwarder live; --co/--dry-run forward into the container for container suites, host suites keep the fast early-exit
-Last activity: 2026-06-12 -- Completed 06-04-PLAN.md
+Milestone: v1.1 Productionize & Merge (planning complete)
+Phase: 7 of 9 (Suite-filtering parity) -- not started
+Plan: -- (defining via /gsd:plan-phase 7)
+Status: v1.0 shipped & archived; v1.1 roadmap created (Phases 7 parity, 8 CI-for-real, 9 docs; then manual delivery)
+Last activity: 2026-06-15 -- v1.1 milestone started
 
-Progress: [██████████] 100%
+Progress: v1.0 [██████████] 100% | v1.1 [░░░░░░░░░░] 0%
 
 ## Performance Metrics
 
