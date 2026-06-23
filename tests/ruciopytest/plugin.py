@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import os
 import sys
+from dataclasses import replace
 
 import pytest
 
@@ -48,6 +49,13 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         action="store_true",
         default=False,
         help="Keep database from previous run (skip purge/rebuild/seed)",
+    )
+    group.addoption(
+        "--policy",
+        action="store",
+        dest="policy",
+        default=None,
+        help="votest policy package (e.g. atlas, belleii); falls back to POLICY env",
     )
     group.addoption(
         "--xdist-workers",
@@ -169,6 +177,7 @@ def pytest_configure(config: pytest.Config) -> None:
             markers=profile.markers,
             exclude_paths=profile.exclude_paths,
             env_vars=profile.env_vars,
+            policy=profile.policy,
         )
 
     elif infra_arg is not None and suite_name is None:
@@ -214,12 +223,36 @@ def pytest_configure(config: pytest.Config) -> None:
             markers=tuple(sorted(all_markers)),
             exclude_paths=tuple(sorted(all_exclude_paths)),
             env_vars=all_env_vars,
+            policy=None,
         )
 
     else:
         # --suite only (no --infra): standard profile resolution
         rdbms_override = os.environ.get("RDBMS")
         profile = resolve_profile(suite_name, rdbms_override)
+
+    # votest: compute the explicit POLICY-driven test_paths from the matrix YAML
+    # ONCE, after the profile is finalized for all branches and before the stash
+    # set. The existing collection path-filter then deselects everything else.
+    if profile.name == "votest":
+        from .votest_support import collect_votest_paths, load_matrix, resolve_policy
+
+        policy = resolve_policy(config, os.environ)
+        if not policy:
+            raise pytest.UsageError(
+                "--suite=votest requires --policy=<name> or the POLICY env var"
+            )
+        matrix = load_matrix(
+            config.rootpath / "etc/docker/test/matrix_policy_package_tests.yml"
+        )
+        if policy not in matrix:
+            raise pytest.UsageError(
+                f"Unknown policy {policy!r}; available: {sorted(matrix)}"
+            )
+        paths = collect_votest_paths(matrix, policy, config.rootpath)
+        profile = replace(profile, test_paths=tuple(paths), policy=policy)
+        # Backward compat: the forwarded in-container run inherits POLICY.
+        os.environ["POLICY"] = policy
 
     # Store in stash (available on both controller and workers)
     config.stash[suite_profile_key] = profile

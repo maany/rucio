@@ -33,6 +33,7 @@ import socket
 import subprocess
 import sys
 import time
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -81,6 +82,7 @@ class InfraManager:
         self._build_database()
         self._create_base_vo_and_root_account()
         self._fix_sqlite_permissions()
+        self._apply_votest_policy()
         self._restart_httpd()
         self._bootstrap_test_data()
         self._sync_rses()
@@ -243,6 +245,44 @@ class InfraManager:
         if os.path.exists(db_path):
             print(f"[infra_manager] Setting SQLite database permissions: {db_path}")
             os.chmod(db_path, 0o666)
+
+    def _apply_votest_policy(self) -> None:
+        """Rewrite the live rucio.cfg ``[policy]`` section for votest.
+
+        Runs only for the votest suite when a policy is set. The rewrite must
+        happen before the httpd restart so the server picks up the new config.
+        No policy-package pip install is performed (live CI installs none; the
+        rewrite alone is sufficient).
+
+        Raises:
+            RuntimeError: if the live ``rucio.cfg`` or the matrix YAML is missing.
+        """
+        if not self._profile.policy or self._profile.name != "votest":
+            return
+
+        # RUCIO_HOME already IS the live etc dir, so rucio.cfg sits directly in it.
+        rucio_cfg = os.path.join(os.environ["RUCIO_HOME"], "rucio.cfg")
+        matrix_path = (
+            Path(os.environ["RUCIO_SOURCE_DIR"])
+            / "etc/docker/test/matrix_policy_package_tests.yml"
+        )
+
+        if not os.path.exists(rucio_cfg):
+            raise RuntimeError(
+                f"[infra_manager] votest: live rucio.cfg not found: {rucio_cfg}"
+            )
+        if not matrix_path.exists():
+            raise RuntimeError(
+                f"[infra_manager] votest: matrix YAML not found: {matrix_path}"
+            )
+
+        from . import votest_support
+
+        matrix = votest_support.load_matrix(matrix_path)
+        votest_support.rewrite_policy_section(
+            rucio_cfg, matrix[self._profile.policy]["config_overrides"]
+        )
+        print(f"[infra_manager] Rewrote [policy] for votest policy={self._profile.policy}")
 
     def _restart_httpd(self) -> None:
         """Gracefully restart Apache httpd and wait for readiness.
