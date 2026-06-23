@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Productionize & Merge
-status: 07-01 shipped -- votest selection (atlas=36/belleii=52) + [policy] rewrite wired
-stopped_at: Completed 07-03-PLAN.md
-last_updated: "2026-06-23T11:16:44.195Z"
-last_activity: 2026-06-23 -- 07-01 executed
+status: 07-02 shipped -- multi_vo 2-VO config generation + per-VO execution (tst then ts2) wired into InfraManager.setup()
+stopped_at: Completed 07-02-PLAN.md
+last_updated: "2026-06-23T11:19:53.248Z"
+last_activity: 2026-06-23 -- 07-02 executed
 progress:
   total_phases: 3
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 3
-  completed_plans: 2
+  completed_plans: 3
   percent: 100
 ---
 
@@ -27,9 +27,9 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 
 Milestone: v1.1 Productionize & Merge (in progress)
 Phase: 7 of 9 (Suite-filtering parity) -- in progress
-Plan: 07-01 complete (votest filtering parity); next 07-02 (multi_vo / parity guard)
-Status: 07-01 shipped -- votest selection (atlas=36/belleii=52) + [policy] rewrite wired
-Last activity: 2026-06-23 -- 07-01 executed
+Plan: 07-02 complete (multi_vo parity); 07-03 (parity guard) runs in parallel
+Status: 07-02 shipped -- multi_vo 2-VO config generation + per-VO execution (tst then ts2 on success) via child pytest, no plugin.py change
+Last activity: 2026-06-23 -- 07-02 executed
 
 Progress: v1.0 [██████████] 100% | v1.1 [██░░░░░░░░] 17%
 
@@ -68,6 +68,7 @@ Progress: v1.0 [██████████] 100% | v1.1 [██░░░░�
 | Phase 06 P04 | 2min | 2 tasks | 2 files |
 | Phase 07 P01 | 8min | 4 tasks | 6 files |
 | Phase 07 P03 | 3min | 2 tasks | 2 files |
+| Phase 07 P02 | 9min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -118,6 +119,9 @@ Recent decisions affecting current work:
 - [Phase 07]: 07-01: cfg [policy] rewrite only, no policy-package pip install (CI reality per RESEARCH Pitfall 3)
 - [Phase 07]: 07-03: parity baseline is checked-in JSON of sorted file paths; comparison is sorted SETS (votest order non-deterministic)
 - [Phase 07]: 07-03: drift guard is import-free (no rucio import / server / container); test_drift_detected proves it fails on inventory or YAML allow/deny changes
+- [Phase 07]: 07-02: multi_vo per-VO run-twice realized as child python -m pytest subprocesses from InfraManager.run_multi_vo() (no plugin.py change, no in-process runtestloop)
+- [Phase 07]: 07-02: per-VO rucio.cfg destination = /opt/rucio/etc/multi_vo/{tst,ts2}/etc/rucio.cfg (verified via tst cfg [alembic] line); merge_configs copied verbatim, not imported
+- [Phase 07]: 07-02: run_multi_vo() triggered as final step of setup() for multi_vo suite; bootstrap_vo re-points RUCIO_HOME with no DB reset; stop-on-tst-failure preserved
 
 ### Pending Todos
 
@@ -135,6 +139,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-23T11:16:44.193Z
-Stopped at: Completed 07-03-PLAN.md
+Last session: 2026-06-23T11:19:43.842Z
+Stopped at: Completed 07-02-PLAN.md
 Resume file: None

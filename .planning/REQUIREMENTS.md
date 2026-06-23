@@ -11,7 +11,7 @@ Requirements for the productionize-and-merge milestone. Delivery (history recons
 ### Suite Parity
 
 - [x] **SUIT-07**: `pytest --suite=votest` selects the POLICY-specific test set (the legacy `votest_helper.py` + `matrix_policy_package_tests.yml` selection), not all of `tests/`
-- [ ] **SUIT-08**: `pytest --suite=multi_vo` runs the multi-VO test selection with the 2-VO configuration, matching legacy `test.sh`/`run_multi_vo_tests_docker.sh`
+- [x] **SUIT-08**: `pytest --suite=multi_vo` runs the multi-VO test selection with the 2-VO configuration, matching legacy `test.sh`/`run_multi_vo_tests_docker.sh`
 - [x] **SUIT-09**: `client`, `remote_dbs`, and `sqlite` selections match legacy `test.sh`, with an automated parity guard against silent drift
 
 ### CI Execution
@@ -41,7 +41,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | SUIT-07 | Phase 7 | Complete |
-| SUIT-08 | Phase 7 | Pending |
+| SUIT-08 | Phase 7 | Complete |
 | SUIT-09 | Phase 7 | Complete |
 | CICD-05 | Phase 8 | Pending |
 | CICD-06 | Phase 8 | Pending |
