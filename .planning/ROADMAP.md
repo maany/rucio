@@ -43,6 +43,11 @@ to maany/rucio (delivery is a manual final step, not a phase).
   3. `client`/`remote_dbs`/`sqlite` selections equal the legacy `test.sh` selections
   4. An automated test fails if any suite's selection drifts from the legacy baseline
 
+**Plans:** 3 plans
+- [ ] 07-01-PLAN.md — votest POLICY selection (absorbed collect_tests → atlas=36/belleii=52) + --policy/POLICY wiring + in-container [policy] rewrite (SUIT-07)
+- [ ] 07-02-PLAN.md — multi_vo 2-VO config generation (absorbed merge_configs) + per-VO run (tst then ts2-on-success) in InfraManager (SUIT-08)
+- [ ] 07-03-PLAN.md — import-free parity baseline + drift guard test (SUIT-09)
+
 ### Phase 8: CI for real
 **Goal**: `simple-autotest.yml` actually runs and goes green for all 6 matrix legs, with artifacts.
 **Depends on**: Phase 7
@@ -71,6 +76,6 @@ to maany/rucio (delivery is a manual final step, not a phase).
 | 4. Test Collection | v1.0 | 2/2 | Complete | 2026-03-11 |
 | 5. CI Workflow | v1.0 | 2/2 | Complete | 2026-03-13 |
 | 6. Host Forwarding | v1.0 | 4/4 | Complete | 2026-06-15 |
-| 7. Suite Parity | v1.1 | 0/? | Not started | - |
+| 7. Suite Parity | v1.1 | 0/3 | Planned | - |
 | 8. CI for Real | v1.1 | 0/? | Not started | - |
 | 9. Plugin Docs | v1.1 | 0/? | Not started | - |

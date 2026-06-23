@@ -2,13 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Productionize & Merge
-status: planning
-last_updated: "2026-06-15T17:30:00.000Z"
+status: v1.0 shipped & archived; v1.1 roadmap created (Phases 7 parity, 8 CI-for-real, 9 docs; then manual delivery)
+stopped_at: Completed 07-01-PLAN.md
+last_updated: "2026-06-23T11:06:49.439Z"
+last_activity: 2026-06-15 -- v1.1 milestone started
 progress:
-  total_phases: 6
-  completed_phases: 6
-  total_plans: 15
-  completed_plans: 15
+  total_phases: 3
+  completed_phases: 0
+  total_plans: 3
+  completed_plans: 1
+  percent: 100
 ---
 
 # Project State
@@ -22,13 +25,13 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 
 ## Current Position
 
-Milestone: v1.1 Productionize & Merge (planning complete)
-Phase: 7 of 9 (Suite-filtering parity) -- not started
-Plan: -- (defining via /gsd:plan-phase 7)
-Status: v1.0 shipped & archived; v1.1 roadmap created (Phases 7 parity, 8 CI-for-real, 9 docs; then manual delivery)
-Last activity: 2026-06-15 -- v1.1 milestone started
+Milestone: v1.1 Productionize & Merge (in progress)
+Phase: 7 of 9 (Suite-filtering parity) -- in progress
+Plan: 07-01 complete (votest filtering parity); next 07-02 (multi_vo / parity guard)
+Status: 07-01 shipped -- votest selection (atlas=36/belleii=52) + [policy] rewrite wired
+Last activity: 2026-06-23 -- 07-01 executed
 
-Progress: v1.0 [██████████] 100% | v1.1 [░░░░░░░░░░] 0%
+Progress: v1.0 [██████████] 100% | v1.1 [██░░░░░░░░] 17%
 
 ## Performance Metrics
 
@@ -63,6 +66,7 @@ Progress: v1.0 [██████████] 100% | v1.1 [░░░░░░�
 | Phase 6 P2 | 7min | 2 tasks | 2 files |
 | Phase 06 P03 | 3min | 3 tasks | 3 files |
 | Phase 06 P04 | 2min | 2 tasks | 2 files |
+| Phase 07 P01 | 8min | 4 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -108,6 +112,9 @@ Recent decisions affecting current work:
 - [Phase 06]: 06-03: host reads results only from mounted JSONL (inherited pipe) to avoid double-draining
 - [Phase 06]: 06-04: forwarding_applies computed once (single _should_forward_to_container call) reused by dry-run guard and delegation; --dry-run/--co forward into the container for container suites, host suites keep the fast early-exit
 - [Phase 06 gap, live-found]: Forwarded host exit code MUST be applied via pytest.exit(returncode=...), not session.exitstatus — pytest _main() overwrites exitstatus from testsfailed/testscollected, and host collection is suppressed (config.args=[]) so testscollected is always 0; all-pass/--co runs wrongly exited 5. finalize_host_exit() fixes FWD-05. Live-verified: --co EXIT=0 (was 5), 29/29 unit tests. Commit 23319a643
+- [Phase 07]: 07-01: votest selection reimplemented (absorbed) in votest_support.py; repo-relative paths, is_file drop -> atlas=36/belleii=52
+- [Phase 07]: 07-01: --policy flag wins over POLICY env; missing/unknown policy raises UsageError (data-driven from YAML keys)
+- [Phase 07]: 07-01: cfg [policy] rewrite only, no policy-package pip install (CI reality per RESEARCH Pitfall 3)
 
 ### Pending Todos
 
@@ -125,6 +132,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-12T10:47:19.806Z
-Stopped at: Completed 06-04-PLAN.md
+Last session: 2026-06-23T11:06:49.436Z
+Stopped at: Completed 07-01-PLAN.md
 Resume file: None
