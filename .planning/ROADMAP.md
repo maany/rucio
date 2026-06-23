@@ -27,7 +27,7 @@ Scope (see `v1.1-DESIGN.md`): suite-filtering parity (votest/multi_vo), CI that 
 runs green with artifacts, plugin README, then clean rucio-convention stacked-PR delivery
 to maany/rucio (delivery is a manual final step, not a phase).
 
-- [ ] Phase 7: Suite-filtering parity — votest POLICY selection, multi_vo 2-VO config, parity guard
+- [x] Phase 7: Suite-filtering parity — votest POLICY selection, multi_vo 2-VO config, parity guard (completed 2026-06-23)
 - [ ] Phase 8: CI for real — host deps install, full rucio for host suites, artifacts/junit, all 6 legs green
 - [ ] Phase 9: Plugin docs — tests/ruciopytest/README.md
 
@@ -43,7 +43,7 @@ to maany/rucio (delivery is a manual final step, not a phase).
   3. `client`/`remote_dbs`/`sqlite` selections equal the legacy `test.sh` selections
   4. An automated test fails if any suite's selection drifts from the legacy baseline
 
-**Plans:** 3 plans
+**Plans:** 3/3 plans complete
 - [ ] 07-01-PLAN.md — votest POLICY selection (absorbed collect_tests → atlas=36/belleii=52) + --policy/POLICY wiring + in-container [policy] rewrite (SUIT-07)
 - [ ] 07-02-PLAN.md — multi_vo 2-VO config generation (absorbed merge_configs) + per-VO run (tst then ts2-on-success) in InfraManager (SUIT-08)
 - [ ] 07-03-PLAN.md — import-free parity baseline + drift guard test (SUIT-09)
@@ -76,6 +76,6 @@ to maany/rucio (delivery is a manual final step, not a phase).
 | 4. Test Collection | v1.0 | 2/2 | Complete | 2026-03-11 |
 | 5. CI Workflow | v1.0 | 2/2 | Complete | 2026-03-13 |
 | 6. Host Forwarding | v1.0 | 4/4 | Complete | 2026-06-15 |
-| 7. Suite Parity | v1.1 | 0/3 | Planned | - |
+| 7. Suite Parity | v1.1 | Complete    | 2026-06-23 | - |
 | 8. CI for Real | v1.1 | 0/? | Not started | - |
 | 9. Plugin Docs | v1.1 | 0/? | Not started | - |
