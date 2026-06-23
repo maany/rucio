@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Productionize & Merge
-status: v1.0 shipped & archived; v1.1 roadmap created (Phases 7 parity, 8 CI-for-real, 9 docs; then manual delivery)
-stopped_at: Completed 07-01-PLAN.md
-last_updated: "2026-06-23T11:06:49.439Z"
-last_activity: 2026-06-15 -- v1.1 milestone started
+status: 07-01 shipped -- votest selection (atlas=36/belleii=52) + [policy] rewrite wired
+stopped_at: Completed 07-03-PLAN.md
+last_updated: "2026-06-23T11:16:44.195Z"
+last_activity: 2026-06-23 -- 07-01 executed
 progress:
   total_phases: 3
   completed_phases: 0
   total_plans: 3
-  completed_plans: 1
+  completed_plans: 2
   percent: 100
 ---
 
@@ -67,6 +67,7 @@ Progress: v1.0 [██████████] 100% | v1.1 [██░░░░�
 | Phase 06 P03 | 3min | 3 tasks | 3 files |
 | Phase 06 P04 | 2min | 2 tasks | 2 files |
 | Phase 07 P01 | 8min | 4 tasks | 6 files |
+| Phase 07 P03 | 3min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -115,6 +116,8 @@ Recent decisions affecting current work:
 - [Phase 07]: 07-01: votest selection reimplemented (absorbed) in votest_support.py; repo-relative paths, is_file drop -> atlas=36/belleii=52
 - [Phase 07]: 07-01: --policy flag wins over POLICY env; missing/unknown policy raises UsageError (data-driven from YAML keys)
 - [Phase 07]: 07-01: cfg [policy] rewrite only, no policy-package pip install (CI reality per RESEARCH Pitfall 3)
+- [Phase 07]: 07-03: parity baseline is checked-in JSON of sorted file paths; comparison is sorted SETS (votest order non-deterministic)
+- [Phase 07]: 07-03: drift guard is import-free (no rucio import / server / container); test_drift_detected proves it fails on inventory or YAML allow/deny changes
 
 ### Pending Todos
 
@@ -132,6 +135,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-23T11:06:49.436Z
-Stopped at: Completed 07-01-PLAN.md
+Last session: 2026-06-23T11:16:44.193Z
+Stopped at: Completed 07-03-PLAN.md
 Resume file: None

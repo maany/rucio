@@ -83,12 +83,104 @@ class InfraManager:
         self._create_base_vo_and_root_account()
         self._fix_sqlite_permissions()
         self._apply_votest_policy()
+        # Generate both VO configs BEFORE httpd restart so the restart picks
+        # them up. No-op for non-multi_vo suites.
+        self._setup_multi_vo()
         self._restart_httpd()
         self._bootstrap_test_data()
         self._sync_rses()
         self._sync_metadata()
 
+        # For the multi_vo suite, drive the legacy per-VO execution (tst, then
+        # ts2 on tst success) as the FINAL step. This is the ONLY trigger for
+        # run_multi_vo(); no plugin.py change is required (plugin already calls
+        # manager.setup() in-container). No-op for other suites.
+        if self._profile.name == "multi_vo":
+            self.run_multi_vo()
+
         print("[infra_manager] Database lifecycle complete\n")
+
+    # ------------------------------------------------------------------
+    # Multi-VO setup + per-VO execution
+    # ------------------------------------------------------------------
+
+    def _setup_multi_vo(self) -> None:
+        """Generate both VO ``rucio.cfg`` files for the multi_vo suite.
+
+        Reproduces the legacy ``test.sh`` two-merge step: merges
+        ``rucio_autotests_common.cfg`` with each of the per-VO source cfgs
+        into the live per-VO etc dirs
+        (``/opt/rucio/etc/multi_vo/{tst,ts2}/etc/rucio.cfg``). Runs strictly
+        BEFORE :meth:`_restart_httpd` so the restart picks up the new configs.
+
+        No-op for non-multi_vo suites.
+
+        Raises:
+            RuntimeError: when a source cfg is missing or a write fails.
+        """
+        if self._profile.name != "multi_vo":
+            return
+
+        from . import multi_vo_support
+
+        # repo_root = in-container source dir (matches the convention used by
+        # _apply_votest_policy / _sync_rses, which read RUCIO_SOURCE_DIR).
+        repo_root = Path(os.environ.get("RUCIO_SOURCE_DIR", "/opt/rucio"))
+        try:
+            multi_vo_support.generate_multi_vo_configs(repo_root)
+        except Exception as e:
+            raise RuntimeError(
+                f"[infra_manager] multi_vo config generation failed: {e}"
+            ) from e
+        print("[infra_manager] Generated multi_vo configs (tst, ts2)")
+
+    def bootstrap_vo(self, vo_home: str) -> None:
+        """Re-point ``RUCIO_HOME`` and bootstrap a single VO (no DB reset).
+
+        Runs ONLY the bootstrap/sync steps -- deliberately NOT
+        ``_purge_database``/``_build_database`` -- so the second VO (ts2)
+        reuses the schema created for tst, mirroring
+        ``run_multi_vo_tests_docker.sh`` (no 2nd DB reset).
+        """
+        os.environ["RUCIO_HOME"] = vo_home
+        print(f"[infra_manager] Bootstrapping VO at RUCIO_HOME={vo_home}")
+        self._create_base_vo_and_root_account()
+        self._bootstrap_test_data()
+        self._sync_rses()
+        self._sync_metadata()
+
+    def run_multi_vo(self) -> int:
+        """Run the full ``tests/`` suite once per VO (tst, then ts2 on success).
+
+        COMMITTED design: each VO leg is a CHILD ``python -m pytest`` process
+        (mirrors ``run_multi_vo_tests_docker.sh``'s ``pytest tests/ -v
+        --tb=short``). This keeps all ownership inside InfraManager with no
+        plugin.py change. Legacy "stop if tst fails" semantics are preserved:
+        ts2 only runs when tst passes, and there is NO 2nd DB reset.
+
+        Returns:
+            The exit code of the tst run if it failed, otherwise the ts2 code.
+        """
+        TST_HOME = "/opt/rucio/etc/multi_vo/tst"
+        TS2_HOME = "/opt/rucio/etc/multi_vo/ts2"
+        pytest_cmd = [sys.executable, "-m", "pytest", "tests/", "-v", "--tb=short"]
+
+        # --- VO tst ---
+        self.bootstrap_vo(TST_HOME)
+        print("[infra_manager] Running tests for VO tst")
+        tst = subprocess.run(pytest_cmd, env={**os.environ, "RUCIO_HOME": TST_HOME})
+        if tst.returncode != 0:
+            print(
+                f"[infra_manager] tst VO failed (rc={tst.returncode}); "
+                "not attempting ts2"
+            )
+            return tst.returncode
+
+        # --- VO ts2 (only on tst success; no DB reset) ---
+        self.bootstrap_vo(TS2_HOME)
+        print("[infra_manager] Running tests for VO ts2")
+        ts2 = subprocess.run(pytest_cmd, env={**os.environ, "RUCIO_HOME": TS2_HOME})
+        return ts2.returncode
 
     # ------------------------------------------------------------------
     # Best-effort steps
