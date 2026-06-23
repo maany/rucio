@@ -48,6 +48,7 @@ class SuiteProfile:
     markers: tuple[str, ...] = ()
     exclude_paths: tuple[str, ...] = ()
     env_vars: dict[str, str] = field(default_factory=dict)
+    policy: "Optional[str]" = None
 
 
 # ---------------------------------------------------------------------------
@@ -154,6 +155,7 @@ def resolve_profile(
             markers=profile.markers,
             exclude_paths=profile.exclude_paths,
             env_vars=profile.env_vars,
+            policy=profile.policy,
         )
 
     return profile
