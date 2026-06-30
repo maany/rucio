@@ -74,6 +74,7 @@ class InfraManager:
         print(f"\n[infra_manager] Setting up database for suite: {self._profile.name}")
 
         # Best-effort steps (swallow all exceptions)
+        self._start_memcache()
         self._flush_memcache()
         self._cleanup_temp_files()
 
@@ -185,6 +186,59 @@ class InfraManager:
     # ------------------------------------------------------------------
     # Best-effort steps
     # ------------------------------------------------------------------
+
+    def _start_memcache(self) -> None:
+        """Start a local ``memcached`` daemon (best-effort, legacy parity).
+
+        The live server rucio.cfg leaves ``[cache] url`` at its default
+        ``127.0.0.1:11211`` (see :data:`rucio.common.cache.CACHE_URL`), so the
+        dogpile ``MemcacheRegion`` used by the RSE-expression parser, the OIDC
+        token cache, and the judge daemon expects a memcached listening on
+        localhost INSIDE the container. Legacy ``tools/run_tests.sh`` starts it
+        (``memcached -u root -d``) at the top of every run; the plugin's
+        in-container bring-up replaces run_tests.sh, so we must start it here.
+
+        Without this, anything cache-backed fails in our suite but passes under
+        legacy: ``test_oidc::test_token_cache`` (set/get round-trips to a dead
+        socket -> get returns ``None``), ``TestJudgeRepairer`` (``region.delete``
+        raises ``ConnectionRefused [Errno 111]``), and
+        ``test_cli_client_structure::test_rse`` (a cache MISS re-evaluates a
+        just-removed RSE expression to the empty set -> ``InvalidRSEExpression``
+        instead of returning the cached result). Idempotent: if memcached is
+        already listening on 11211 this is a no-op.
+        """
+        # Already up? (e.g. entrypoint started it, or a previous setup pass.)
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                sock.settimeout(1)
+                sock.connect(('127.0.0.1', 11211))
+            print("[infra_manager] memcached already running on 11211")
+            return
+        except Exception:
+            pass
+
+        # Mirror tools/run_tests.sh: `memcached -u root -d`.
+        try:
+            subprocess.run(['memcached', '-u', 'root', '-d'], check=False,
+                           capture_output=True, timeout=10)
+        except FileNotFoundError:
+            print("[infra_manager] Warning: memcached not found, skipping start")
+            return
+        except Exception as e:
+            print(f"[infra_manager] Warning: could not start memcached: {e}")
+            return
+
+        # Wait (up to ~10s) for the daemon to accept connections.
+        for _ in range(10):
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                    sock.settimeout(1)
+                    sock.connect(('127.0.0.1', 11211))
+                print("[infra_manager] memcached started on 11211")
+                return
+            except Exception:
+                time.sleep(1)
+        print("[infra_manager] Warning: memcached did not become ready on 11211")
 
     def _flush_memcache(self) -> None:
         """Send ``flush_all`` to a local memcache instance (best-effort)."""
@@ -667,6 +721,21 @@ class InfraManager:
                     except Exception:
                         print("[infra_manager] Failed to add value " + value + " to key " + key)
                         tb.print_exc()
+
+                    # Legacy parity: tools/sync_meta.py creates a scope named
+                    # after every ``project`` value (``c.add_scope('root',
+                    # value)``). This is how the hardcoded ``data13_hip`` scope
+                    # used by test_reaper / test_did exists under legacy. Without
+                    # it those tests hit ``ForeignKeyViolation: Key
+                    # (scope)=(data13_hip) is not present in table "scopes"``.
+                    if key == 'project':
+                        try:
+                            c.add_scope('root', value)
+                        except Duplicate:
+                            pass
+                        except Exception:
+                            print("[infra_manager] Failed to add scope " + value)
+                            tb.print_exc()
 
             print("[infra_manager] Metadata sync completed\n")
 
