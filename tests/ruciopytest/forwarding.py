@@ -194,7 +194,15 @@ class ReportStreamEmitter:
         data = self._config.hook.pytest_report_to_serializable(
             config=self._config, report=report
         )
-        self._fh.write(json.dumps(data) + "\n")
+        # pytest serializes the report's ``__dict__``; under xdist the controller
+        # re-fires worker reports carrying a ``node`` attribute set to the
+        # ``WorkerController`` (not JSON-serializable). It is xdist-internal and
+        # irrelevant to the host replay, so drop it. ``default=str`` is a
+        # belt-and-suspenders fallback for any other non-serializable attribute
+        # xdist may attach, so a single report can never abort the whole stream.
+        if isinstance(data, dict):
+            data.pop("node", None)
+        self._fh.write(json.dumps(data, default=str) + "\n")
         self._fh.flush()
 
     def close(self) -> None:

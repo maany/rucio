@@ -25,6 +25,11 @@ from .profiles import SUITE_PROFILES, SuiteProfile  # noqa: F401
 suite_profile_key = pytest.StashKey[SuiteProfile]()
 container_manager_key = pytest.StashKey["ContainerManager"]()
 delegate_to_container_key = pytest.StashKey[bool]()
+# Set on the in-container multi_vo outer session: the aggregate exit code of the
+# per-VO xdist children (run_multi_vo). When present, the outer session does NOT
+# collect/run the suite itself -- it mirrors this code so CI gates on the
+# faithful per-VO xdist execution, not a redundant serial pass.
+multi_vo_forward_rc_key = pytest.StashKey[int]()
 
 
 class NoParallelGroups(enum.Enum):

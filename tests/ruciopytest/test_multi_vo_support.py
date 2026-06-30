@@ -205,6 +205,64 @@ def test_run_multi_vo_order_and_gate(monkeypatch):
     assert run_calls == ["/opt/rucio/etc/multi_vo/tst"]
 
 
+_FWD_PLUGIN = "tests.ruciopytest.forward_stream_plugin"
+
+
+def test_multi_vo_pytest_cmd_forward_stream(monkeypatch):
+    """The tst child streams to the host (forwarder plugin in argv) ONLY when
+    RUCIO_FORWARD_STREAM is set AND forward_stream=True; ts2 (forward_stream=
+    False) never does -- replaying the same node ids twice would corrupt junit."""
+    from tests.ruciopytest.infra_manager import InfraManager
+    from tests.ruciopytest.profiles import resolve_profile
+
+    manager = InfraManager(resolve_profile("multi_vo"), keep_db=False)
+
+    # No stream env -> never add the forwarder plugin even with the flag set.
+    monkeypatch.delenv("RUCIO_FORWARD_STREAM", raising=False)
+    assert _FWD_PLUGIN not in manager._multi_vo_pytest_cmd(forward_stream=True)
+
+    # Stream env set but forward_stream=False (the ts2 leg) -> no forwarder.
+    monkeypatch.setenv("RUCIO_FORWARD_STREAM", "/rucio_source/.test-forward/x.jsonl")
+    assert _FWD_PLUGIN not in manager._multi_vo_pytest_cmd(forward_stream=False)
+
+    # Stream env set AND forward_stream=True (the tst leg) -> forwarder present,
+    # loaded via `-p`.
+    cmd = manager._multi_vo_pytest_cmd(forward_stream=True)
+    assert _FWD_PLUGIN in cmd
+    assert cmd[cmd.index(_FWD_PLUGIN) - 1] == "-p"
+
+
+def test_run_multi_vo_only_tst_streams(monkeypatch):
+    """run_multi_vo streams ONLY the tst child; ts2 runs with the stream env
+    stripped so the host junit gets one clean copy of the suite."""
+    manager = _make_manager("multi_vo")
+    monkeypatch.setattr(manager, "bootstrap_vo", mock.MagicMock())
+    monkeypatch.setenv("RUCIO_FORWARD_STREAM", "/rucio_source/.test-forward/x.jsonl")
+
+    seen = []
+
+    def fake_run(cmd, env=None, **kwargs):
+        seen.append(
+            (
+                env["RUCIO_HOME"],
+                env.get("RUCIO_FORWARD_STREAM"),
+                _FWD_PLUGIN in cmd,
+            )
+        )
+        return mock.Mock(returncode=0)
+
+    monkeypatch.setattr("tests.ruciopytest.infra_manager.subprocess.run", fake_run)
+
+    rc = manager.run_multi_vo()
+    assert rc == 0
+    # tst: streams (forwarder plugin present, stream env propagated).
+    assert seen[0][0].endswith("/tst")
+    assert seen[0][1] and seen[0][2] is True
+    # ts2: does NOT stream (forwarder absent, stream env removed from its env).
+    assert seen[1][0].endswith("/ts2")
+    assert seen[1][1] is None and seen[1][2] is False
+
+
 def test_setup_invokes_multi_vo_in_order(monkeypatch):
     """WARNING B guard: setup() must call _setup_multi_vo before
     _restart_httpd before run_multi_vo for the multi_vo suite, and call

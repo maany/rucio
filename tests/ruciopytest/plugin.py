@@ -22,7 +22,12 @@ import pytest
 
 from .profiles import SuiteProfile, resolve_profile
 from .xdist_config import configure_xdist
-from . import suite_profile_key, container_manager_key, delegate_to_container_key
+from . import (
+    suite_profile_key,
+    container_manager_key,
+    delegate_to_container_key,
+    multi_vo_forward_rc_key,
+)
 
 try:
     from .xdist_noparallel_scheduler import noparallel_report_key
@@ -294,6 +299,18 @@ def pytest_configure(config: pytest.Config) -> None:
                 manager = InfraManager(profile, keep_db=keep_db)
                 manager.setup()
 
+                # multi_vo: setup() already drove the per-VO xdist children
+                # (run_multi_vo) -- the faithful, gating execution -- and the
+                # tst child streamed its reports to the host. Do NOT let this
+                # outer forwarded session ALSO collect+run the suite (that was a
+                # second, serial, non-xdist pass that became the WRONG gate and
+                # double-executed the suite). Suppress its own collection and
+                # mirror the children's aggregate exit code in pytest_runtestloop.
+                if profile.name == "multi_vo":
+                    config.stash[multi_vo_forward_rc_key] = manager._multi_vo_rc
+                    config.args = []
+                    return  # children own the host stream; nothing else to do
+
             # If the host launched us with RUCIO_FORWARD_STREAM set, attach the
             # report-stream emitter so each in-container report is mirrored back.
             from . import forwarding
@@ -343,6 +360,18 @@ def pytest_runtestloop(session: pytest.Session) -> object | None:
     raises ``pytest.exit`` -- which also prevents the default test loop.
     """
     config = session.config
+
+    # In-container multi_vo outer session: the per-VO xdist children already ran
+    # (run_multi_vo) and the tst child streamed its reports to the host. This
+    # session collected nothing (config.args was cleared); exit with the
+    # children's aggregate code so the host -- and therefore CI -- gates on the
+    # faithful per-VO xdist execution rather than a redundant serial pass.
+    mv_rc = config.stash.get(multi_vo_forward_rc_key, None)
+    if mv_rc is not None:
+        from . import forwarding
+        forwarding.finalize_host_exit(session, mv_rc)  # raises pytest.exit
+        return None  # not reached
+
     if not config.stash.get(delegate_to_container_key, False):
         return None  # Normal execution
 

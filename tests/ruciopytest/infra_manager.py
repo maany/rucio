@@ -57,6 +57,10 @@ class InfraManager:
         self._keep_db = keep_db
         # Cached flag: whether the current DB is SQLite (set during purge)
         self._is_sqlite: bool | None = None
+        # Aggregate exit code of the per-VO multi_vo execution (run_multi_vo).
+        # The outer forwarded session mirrors this so CI gates on the per-VO
+        # xdist children rather than a redundant serial pass. 0 for non-multi_vo.
+        self._multi_vo_rc: int = 0
 
     # ------------------------------------------------------------------
     # Public API
@@ -104,6 +108,11 @@ class InfraManager:
         # above (idempotent regeneration is skipped here to avoid re-pointing).
         if self._profile.name != "multi_vo":
             self._setup_multi_vo()
+        # multi_vo: make the LIVE SERVER cfg multi_vo-aware BEFORE the httpd
+        # restart so the WSGI workers resolve the generic_multi_vo schema
+        # (SCOPE_LENGTH=29) and the <scope>@<vo> internal scopes fit.
+        if self._profile.name == "multi_vo":
+            self._apply_multi_vo_server_config()
         self._restart_httpd()
         self._bootstrap_test_data()
         self._sync_rses()
@@ -114,7 +123,7 @@ class InfraManager:
         # run_multi_vo(); no plugin.py change is required (plugin already calls
         # manager.setup() in-container). No-op for other suites.
         if self._profile.name == "multi_vo":
-            self.run_multi_vo()
+            self._multi_vo_rc = self.run_multi_vo()
 
         print("[infra_manager] Database lifecycle complete\n")
 
@@ -210,7 +219,61 @@ class InfraManager:
         self._sync_rses()
         self._sync_metadata()
 
-    def _multi_vo_pytest_cmd(self) -> list[str]:
+    def _apply_multi_vo_server_config(self) -> None:
+        """Make the LIVE SERVER ``rucio.cfg`` multi_vo-aware before httpd restart.
+
+        The httpd/WSGI server reads the entrypoint-generated
+        ``/opt/rucio/etc/rucio.cfg``; its ``RUCIO_HOME=/opt/rucio`` is fixed when
+        the daemon master starts, so re-pointing the harness env at the per-VO
+        cfg does NOT change which cfg the server loads. That entrypoint cfg has
+        no ``[common] multi_vo`` and no multi_vo schema, so the server resolves
+        the SINGLE-VO schema (``generic`` -> ``SCOPE_LENGTH=25``). In multi_vo
+        every request's internal scope is ``<scope>@<vo>`` (e.g. a 25-char scope
+        + ``@tst`` = 29 chars), which overflows the 25-char
+        ``TEMPORARY_SCOPE_NAME`` column the recursive-list / bulk-attach path
+        builds -> ``psycopg StringDataRightTruncation``, surfaced to the client
+        as the masked ``DatabaseException: An unknown Database Exception has
+        occurred`` (e.g. ``test_did::test_list_recursive``). This is xdist-
+        independent -- it fails identically under serial AND xdist execution.
+
+        Legacy ``run_multi_vo_tests_docker.sh`` avoids it by running the server
+        with ``RUCIO_HOME`` pointed at the tst (multi_vo) cfg, so the server uses
+        ``generic_multi_vo`` (``SCOPE_LENGTH=29``). We mirror that by copying the
+        multi_vo markers from the generated tst cfg into the live server cfg:
+        ``[common] multi_vo=True`` and ``[policy] permission/schema=
+        generic_multi_vo``. Must run BEFORE the httpd graceful restart so the new
+        workers pick it up.
+        """
+        import configparser
+
+        server_cfg = "/opt/rucio/etc/rucio.cfg"
+        tst_cfg = "/opt/rucio/etc/multi_vo/tst/etc/rucio.cfg"
+        if not os.path.exists(server_cfg):
+            print(f"[infra_manager] multi_vo: server cfg not found: {server_cfg}")
+            return
+
+        tst = configparser.ConfigParser()
+        tst.read(tst_cfg)
+
+        cfg = configparser.ConfigParser()
+        cfg.read(server_cfg)
+        if not cfg.has_section("common"):
+            cfg.add_section("common")
+        cfg.set("common", "multi_vo", "True")
+        if not cfg.has_section("policy"):
+            cfg.add_section("policy")
+        for key in ("permission", "schema"):
+            value = tst.get("policy", key, fallback="generic_multi_vo")
+            cfg.set("policy", key, value)
+
+        with open(server_cfg, "w") as f:
+            cfg.write(f)
+        print(
+            "[infra_manager] multi_vo: live server cfg -> multi_vo=True + "
+            "generic_multi_vo schema (SCOPE_LENGTH=29)"
+        )
+
+    def _multi_vo_pytest_cmd(self, forward_stream: bool = False) -> list[str]:
         """Build the per-VO child pytest argv, mirroring the legacy multi_vo run.
 
         Legacy ``tools/run_multi_vo_tests_docker.sh`` runs each VO leg via
@@ -254,6 +317,16 @@ class InfraManager:
             if pattern.endswith("/*"):
                 cmd.append(f"--ignore={pattern[:-2]}")
 
+        # When forwarding is active (the host launched the outer session with
+        # RUCIO_FORWARD_STREAM set), make THIS child stream its per-test reports
+        # back to the host's JSONL file. The child runs WITHOUT --suite, so the
+        # main rucio plugin is dormant and never registers the emitter itself;
+        # load the dedicated forwarder plugin explicitly so the host's junit
+        # reflects this faithful xdist+noparallel execution (Session A) instead
+        # of the suppressed serial outer pass.
+        if forward_stream and os.environ.get("RUCIO_FORWARD_STREAM"):
+            cmd += ["-p", "tests.ruciopytest.forward_stream_plugin"]
+
         return cmd
 
     def run_multi_vo(self) -> int:
@@ -271,12 +344,20 @@ class InfraManager:
         """
         TST_HOME = "/opt/rucio/etc/multi_vo/tst"
         TS2_HOME = "/opt/rucio/etc/multi_vo/ts2"
-        pytest_cmd = self._multi_vo_pytest_cmd()
 
-        # --- VO tst ---
+        # The tst child streams its reports to the host (forward_stream=True) so
+        # the host junit reflects the faithful xdist+noparallel execution. The
+        # ts2 child does NOT stream: replaying the SAME node ids a second time
+        # would corrupt the host junitxml (duplicate <testcase> per node). ts2
+        # still runs and still gates -- its exit code is the aggregate return
+        # below -- mirroring legacy's "tst must pass, then ts2 must pass".
+        tst_cmd = self._multi_vo_pytest_cmd(forward_stream=True)
+        ts2_cmd = self._multi_vo_pytest_cmd(forward_stream=False)
+
+        # --- VO tst (streamed to host) ---
         self.bootstrap_vo(TST_HOME)
         print("[infra_manager] Running tests for VO tst")
-        tst = subprocess.run(pytest_cmd, env={**os.environ, "RUCIO_HOME": TST_HOME})
+        tst = subprocess.run(tst_cmd, env={**os.environ, "RUCIO_HOME": TST_HOME})
         if tst.returncode != 0:
             print(
                 f"[infra_manager] tst VO failed (rc={tst.returncode}); "
@@ -284,10 +365,12 @@ class InfraManager:
             )
             return tst.returncode
 
-        # --- VO ts2 (only on tst success; no DB reset) ---
+        # --- VO ts2 (only on tst success; no DB reset; not streamed) ---
         self.bootstrap_vo(TS2_HOME)
         print("[infra_manager] Running tests for VO ts2")
-        ts2 = subprocess.run(pytest_cmd, env={**os.environ, "RUCIO_HOME": TS2_HOME})
+        ts2_env = {**os.environ, "RUCIO_HOME": TS2_HOME}
+        ts2_env.pop("RUCIO_FORWARD_STREAM", None)
+        ts2 = subprocess.run(ts2_cmd, env=ts2_env)
         return ts2.returncode
 
     # ------------------------------------------------------------------
