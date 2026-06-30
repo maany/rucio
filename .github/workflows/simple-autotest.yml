@@ -89,7 +89,69 @@ jobs:
           outputs: type=docker
           cache-from: type=registry,ref=ghcr.io/${{ steps.imgmeta.outputs.repo }}/rucio-dev-runtime:py${{ steps.imgmeta.outputs.pynodot }}-buildcache
 
+      # ----------------------------------------------------------------
+      # Host-side `client` leg provisioning (legacy autotest path).
+      # Gated to matrix.suite == 'client' so the other 4 legs are untouched.
+      # Mirrors tools/test/test.sh SUITE=client: full rucio install +
+      # `tools/run_tests.sh -i` bootstrap + rucio_client.cfg/cert wiring.
+      # ----------------------------------------------------------------
+      - name: Install full rucio on host (client)
+        if: matrix.suite == 'client'
+        run: |
+          # Legacy-equivalent minimal set: editable rucio + server + client + dev reqs.
+          # Reuses the setup-python (and its pip cache) from above; no second setup-python.
+          python -m pip install -e . \
+            -r requirements/requirements.server.txt \
+            -r requirements/requirements.client.txt \
+            -r requirements/requirements.dev.txt
+          # test_bin_rucio shells out to the `rucio` CLI; put bin/ on PATH (no console_scripts).
+          echo "$GITHUB_WORKSPACE/bin" >> "$GITHUB_PATH"
+
+      - name: Provision rucio server for client (host)
+        id: client_provision
+        if: matrix.suite == 'client'
+        continue-on-error: true
+        env:
+          RUCIO_TEST_IMAGE: ${{ matrix.python == '3.10' && needs.runtime_images.outputs.py310_image || needs.runtime_images.outputs.py39_image }}
+          RDBMS: ${{ matrix.rdbms }}
+          PYTHON: ${{ matrix.python }}
+        run: |
+          set -x
+          # Dev compose + ports override so the server is reachable on 127.0.0.1:8443
+          # and postgres on 127.0.0.1:5432, with the runtime image built/pulled above.
+          COMPOSE="docker compose -p rucio-client-ci -f etc/docker/dev/docker-compose.yml -f etc/docker/dev/docker-compose.test.override.yml -f etc/docker/dev/docker-compose.ports.yml --profile postgres14"
+          # Bring up server + DB, then run the legacy `-i` bootstrap inside the rucio
+          # container so DB init / bootstrap matches legacy exactly.
+          $COMPOSE up -d --wait rucio
+          $COMPOSE exec -T rucio tools/run_tests.sh -i
+
+          # Wire client cfg + certs into a host RUCIO_HOME pointed at the published server.
+          CLIENT_HOME="$GITHUB_WORKSPACE/.rucio-client-home"
+          mkdir -p "$CLIENT_HOME/etc"
+          cp etc/docker/test/extra/rucio_client.cfg "$CLIENT_HOME/etc/rucio.cfg"
+          # rucio_host/auth_host -> published 8443; cert paths -> checked-in host certs.
+          sed -i \
+            -e "s#https://localhost:443#https://localhost:8443#g" \
+            -e "s#/opt/rucio/etc/certs/rucio_ca.pem#$GITHUB_WORKSPACE/etc/certs/rucio_ca.pem#g" \
+            -e "s#/opt/rucio/etc/certs/ruciouser.pem#$GITHUB_WORKSPACE/etc/certs/ruciouser.pem#g" \
+            -e "s#/opt/rucio/etc/certs/ruciouser.key.pem#$GITHUB_WORKSPACE/etc/certs/ruciouser.key.pem#g" \
+            "$CLIENT_HOME/etc/rucio.cfg"
+          echo "RUCIO_HOME=$CLIENT_HOME" >> "$GITHUB_ENV"
+
+          # Reachability gate: httpd answers AND host collection imports cleanly.
+          # Either failure flips reachable=false -> in-container fallback takes over.
+          reachable=true
+          if ! curl --retry 15 --retry-all-errors --retry-delay 2 -k https://localhost:8443/ping; then
+            reachable=false
+          fi
+          export RUCIO_HOME="$CLIENT_HOME"
+          if ! python -m pytest --suite=client --co -q tests/ ; then
+            reachable=false
+          fi
+          echo "reachable=$reachable" >> "$GITHUB_OUTPUT"
+
       - name: Run tests
+        if: matrix.suite != 'client' || steps.client_provision.outputs.reachable == 'true'
         env:
           RUCIO_TEST_IMAGE: ${{ matrix.python == '3.10' && needs.runtime_images.outputs.py310_image || needs.runtime_images.outputs.py39_image }}
           RDBMS: ${{ matrix.rdbms }}
