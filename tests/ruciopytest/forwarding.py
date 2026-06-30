@@ -257,6 +257,16 @@ def replay_report_line(session: "Session", line: str) -> bool:
     if report is None:
         return False
 
+    # JSON has no tuples: pytest serializes a skipped report's ``longrepr``
+    # (path, lineno, reason) 3-tuple and the core round-trip restores it as a
+    # list. The terminal reporter's ``_get_raw_skip_reason`` asserts the skip
+    # ``longrepr`` is a tuple, so an un-normalized list crashes the whole host
+    # session with an INTERNALERROR the moment any container test is skipped or
+    # xfailed. Restore the tuple shape the reporter contracts on.
+    longrepr = getattr(report, "longrepr", None)
+    if getattr(report, "skipped", False) and isinstance(longrepr, list) and len(longrepr) == 3:
+        report.longrepr = tuple(longrepr)
+
     if data.get("$report_type") == "CollectReport":
         config.hook.pytest_collectreport(report=report)
     else:

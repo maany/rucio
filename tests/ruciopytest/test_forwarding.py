@@ -134,6 +134,46 @@ def test_roundtrip_failure_preserves_longrepr(call_reports):
     assert str(restored.longrepr)
 
 
+def test_replay_skip_report_restores_longrepr_tuple(pytester):
+    """A skipped report's (path, lineno, reason) longrepr must replay as a tuple.
+
+    Regression: JSON has no tuples, so the core round-trip restores a skip
+    report's longrepr as a list. pytest's terminal reporter asserts
+    ``isinstance(report.longrepr, tuple)`` (``_get_raw_skip_reason``), so an
+    un-normalized list crashes the whole host session with an INTERNALERROR the
+    moment any container test is skipped/xfailed. ``replay_report_line`` must
+    hand the host a tuple-shaped longrepr.
+    """
+    recorder = _run_inline_and_collect(
+        pytester,
+        """
+        import pytest
+
+        def test_skipme():
+            pytest.skip("nope")
+        """,
+    )
+    config = pytester._request.config
+    skips = [r for r in recorder.test_reports if r.skipped and r.when == "call"]
+    assert skips, "expected a skipped call report"
+    line = _serialize_line(config, skips[0])
+
+    sink = _ReportRecorder()
+    config.pluginmanager.register(sink, name="skip-sink-test")
+    try:
+        session = type("S", (), {"config": config})()
+        dispatched = replay_report_line(session, line)
+    finally:
+        config.pluginmanager.unregister(name="skip-sink-test")
+
+    assert dispatched is True
+    assert len(sink.test_reports) == 1
+    replayed = sink.test_reports[0]
+    assert replayed.skipped
+    assert isinstance(replayed.longrepr, tuple)
+    assert len(replayed.longrepr) == 3
+
+
 # ---------------------------------------------------------------------------
 # Behavior 2: replay_report_line re-dispatches via the right hook.
 # ---------------------------------------------------------------------------
