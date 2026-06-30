@@ -1,14 +1,17 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
+milestone: v1.1
 milestone_name: Productionize & Merge
-status: unknown
-last_updated: "2026-06-23T11:37:50.177Z"
+status: 08-02 shipped -- 5-leg matrix (sqlite dropped), setup-python + host plugin deps before forwarding pytest on every leg, votest policy=atlas/POLICY, per-leg junit report + on-failure host-log capture
+stopped_at: Completed 08-01-PLAN.md
+last_updated: "2026-06-30T11:02:21.358Z"
+last_activity: 2026-06-30 -- 08-02 executed
 progress:
-  total_phases: 7
-  completed_phases: 7
-  total_plans: 18
-  completed_plans: 18
+  total_phases: 3
+  completed_phases: 1
+  total_plans: 7
+  completed_plans: 5
+  percent: 100
 ---
 
 # Project State
@@ -23,10 +26,10 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 ## Current Position
 
 Milestone: v1.1 Productionize & Merge (in progress)
-Phase: 7 of 9 (Suite-filtering parity) -- in progress
-Plan: 07-02 complete (multi_vo parity); 07-03 (parity guard) runs in parallel
-Status: 07-02 shipped -- multi_vo 2-VO config generation + per-VO execution (tst then ts2 on success) via child pytest, no plugin.py change
-Last activity: 2026-06-23 -- 07-02 executed
+Phase: 8 of 9 (CI for real) -- in progress
+Plan: 08-02 complete (simple-autotest host-deps + artifacts); 08-01 prior
+Status: 08-02 shipped -- 5-leg matrix (sqlite dropped), setup-python + host plugin deps before forwarding pytest on every leg, votest policy=atlas/POLICY, per-leg junit report + on-failure host-log capture
+Last activity: 2026-06-30 -- 08-02 executed
 
 Progress: v1.0 [██████████] 100% | v1.1 [██░░░░░░░░] 17%
 
@@ -66,6 +69,8 @@ Progress: v1.0 [██████████] 100% | v1.1 [██░░░░�
 | Phase 07 P01 | 8min | 4 tasks | 6 files |
 | Phase 07 P03 | 3min | 2 tasks | 2 files |
 | Phase 07 P02 | 9min | 3 tasks | 3 files |
+| Phase 08 P02 | 2min | 2 tasks | 1 files |
+| Phase 08 P01 | 6min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -119,6 +124,10 @@ Recent decisions affecting current work:
 - [Phase 07]: 07-02: multi_vo per-VO run-twice realized as child python -m pytest subprocesses from InfraManager.run_multi_vo() (no plugin.py change, no in-process runtestloop)
 - [Phase 07]: 07-02: per-VO rucio.cfg destination = /opt/rucio/etc/multi_vo/{tst,ts2}/etc/rucio.cfg (verified via tst cfg [alembic] line); merge_configs copied verbatim, not imported
 - [Phase 07]: 07-02: run_multi_vo() triggered as final step of setup() for multi_vo suite; bootstrap_vo re-points RUCIO_HOME with no DB reset; stop-on-tst-failure preserved
+- [Phase 08]: 08-02: host driver deps installed via pip -c constraints against requirements.dev.txt (not -r) so legs get pinned pytest/xdist/pyyaml without full server env
+- [Phase 08]: 08-02: votest leg gets policy=atlas via matrix.policy + POLICY env export; sqlite leg dropped -> 5-leg matrix
+- [Phase 08]: 08-02: pytest output tee'd to <leg>.pytest.log with set -o pipefail; on-failure host-logs artifact = .test-forward + pytest.log (alongside container .test-logs)
+- [Phase 08]: 08-01: sqlite removed from plugin SUITE_PROFILES/--suite choices and parity baseline+guard; legacy autotest CI keeps sqlite (untouched); generic rdbms_override != sqlite plumbing retained
 
 ### Pending Todos
 
@@ -136,6 +145,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-23T11:19:43.842Z
-Stopped at: Completed 07-02-PLAN.md
+Last session: 2026-06-30T11:02:21.356Z
+Stopped at: Completed 08-01-PLAN.md
 Resume file: None

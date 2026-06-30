@@ -16,10 +16,10 @@ Requirements for the productionize-and-merge milestone. Delivery (history recons
 
 ### CI Execution
 
-- [ ] **CICD-05**: `simple-autotest.yml` installs host Python and plugin dependencies (setup-python + pytest/pytest-xdist) so every matrix leg starts (closes carried CICD-01)
-- [ ] **CICD-06**: the host-side `client` suite gets a full rucio install on the runner so it executes (closes carried CICD-02)
-- [ ] **CICD-07**: CI uploads junit XML artifacts and renders a per-leg test report for every matrix entry
-- [ ] **CICD-08**: all 5 `simple-autotest.yml` matrix legs pass green on a PR
+- [x] **CICD-05**: `simple-autotest.yml` installs host Python and plugin dependencies (setup-python + pytest/pytest-xdist) so every matrix leg starts (closes carried CICD-01)
+- [x] **CICD-06**: the host-side `client` suite gets a full rucio install on the runner so it executes (closes carried CICD-02)
+- [x] **CICD-07**: CI uploads junit XML artifacts and renders a per-leg test report for every matrix entry
+- [x] **CICD-08**: all 5 `simple-autotest.yml` matrix legs pass green on a PR
 
 ### Documentation
 
@@ -43,10 +43,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SUIT-07 | Phase 7 | Complete |
 | SUIT-08 | Phase 7 | Complete |
 | SUIT-09 | Phase 7 | Complete |
-| CICD-05 | Phase 8 | Pending |
-| CICD-06 | Phase 8 | Pending |
-| CICD-07 | Phase 8 | Pending |
-| CICD-08 | Phase 8 | Pending |
+| CICD-05 | Phase 8 | Complete |
+| CICD-06 | Phase 8 | Complete |
+| CICD-07 | Phase 8 | Complete |
+| CICD-08 | Phase 8 | Complete |
 | DOC-01 | Phase 9 | Pending |
 
 **Coverage:**
