@@ -479,3 +479,53 @@ inherit decision to the user (do NOT patch test_bad_replica / test_bin_rucio).
 - tests/ruciopytest/forward_stream_plugin.py (NEW: controller-only stream emitter for the children)
 - tests/ruciopytest/__init__.py        (multi_vo_forward_rc_key stash key)
 - tests/ruciopytest/test_multi_vo_support.py (2 new unit tests)
+
+## CI RESULT of commit 0391b6dc1 (run 28475286292, sha 6a4c2bc7a) — WORKED
+Wiring + server-schema engaged; test_did / test_bad_replica / test_bin_rucio all
+PASS in both VO runs; no "too many clients". tst sub-run 1234 passed / 0 failed
+(GREEN). ONE residual remained, ts2-only.
+
+## ts2-only residual (3x test_dataset_replicas) — ROOT-CAUSED + FIXED (commit d7fc5ef21)
+Symptom (ts2 leg only; PASS in tst): `InvalidRSEExpression: RSE Expression 'MOCK'
+resulted in an empty set` on test_list_dataset_replicas / _bulk /
+test_list_datasets_per_rse (all @noparallel, all add_replication_rule(
+rse_expression='MOCK')).
+
+NOT a bootstrap-auth/token bleed (coordinator's first hypothesis — DISPROVEN
+locally): the per-VO token cache path is already VO-scoped
+(`/tmp/.rucio_root@testvo1` vs `@testvo2`), and a direct diagnostic showed the
+ts2 bootstrap client resolves `Client().vo='testvo2'` and **MOCK IS created in
+testvo2** (DB query: vo='ts2' has 11 rses incl. MOCK). The DB is correct.
+
+ACTUAL root cause = VO-independent RSE-expression **memcache** key.
+`rucio.core.rse_expression_parser.parse_expression`:
+  `REGION.get(sha256(expression.encode()).hexdigest())`  (no VO in the key)
+then filters the cached result by `filter_['vo']`. During the tst child run
+'MOCK' is cached as `[MOCK@tst]` (ts2's MOCK not created yet); the ts2 child then
+gets that stale VO-independent hit, filters to vo=ts2 -> empty -> raises. Legacy
+`run_multi_vo_tests_docker.sh` `echo flush_all` to memcache BEFORE each VO
+bootstrap; our `bootstrap_vo` cleared the config singleton but never flushed
+memcache.
+
+Surgically REPRODUCED + verified locally (live stack, in-process):
+  step2 parse('MOCK', vo=tst) -> OK [MOCK@tst] (caches under sha256('MOCK'))
+  step3 bootstrap ts2 (creates MOCK@ts2)
+  step4 parse('MOCK', vo=ts2) with stale cache -> InvalidRSEExpression  (BUG)
+  step5 _flush_memcache(); parse('MOCK', vo=ts2) -> OK [MOCK@ts2]        (FIX)
+After integrating the flush into bootstrap_vo, step4 -> OK (bug-present=False).
+
+FIX (infra/parity only): `bootstrap_vo()` now calls `_flush_memcache()` after
+`clean_cached_config()`, before the data bootstrap (legacy per-VO flush parity).
+
+### Worker-cap faithfulness (same batch)
+The per-VO xdist child came up `numprocesses=auto` (4 on this host) not 3 because
+the `=3` branch keys on `GITHUB_ACTIONS=="true"`, which the forwarder never
+propagated into the container (also the cause of the local "too many clients").
+FIX: add `GITHUB_ACTIONS` to `forwarding._ENV_ALLOWLIST_EXACT` so it reaches the
+in-container session and its per-VO children -> 3 workers under CI.
+
+### Verification status
+Unit: test_multi_vo_support 9 / test_forwarding 41 pass (added bootstrap_vo
+flush-order assertion). Surgical MOCK-cache repro+fix proven. Full local e2e
+`--suite=multi_vo` (GITHUB_ACTIONS=true -> 3 workers) launched for the final
+tst+ts2 green tally. Committed d7fc5ef21 locally; NOT pushed.
