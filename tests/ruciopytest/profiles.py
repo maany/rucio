@@ -65,6 +65,7 @@ SUITE_PROFILES: dict[str, SuiteProfile] = {
         default_workers_ci=3,
         default_workers_local="auto",
         test_paths=("tests/",),
+        exclude_paths=("tests/ruciopytest/*",),
     ),
     "multi_vo": SuiteProfile(
         name="multi_vo",
@@ -75,6 +76,7 @@ SUITE_PROFILES: dict[str, SuiteProfile] = {
         default_workers_ci=3,
         default_workers_local="auto",
         test_paths=("tests/",),
+        exclude_paths=("tests/ruciopytest/*",),
         env_vars={"RUCIO_HOME": "/opt/rucio/etc/multi_vo/tst"},
     ),
     "client": SuiteProfile(
@@ -100,6 +102,7 @@ SUITE_PROFILES: dict[str, SuiteProfile] = {
         default_workers_ci=3,
         default_workers_local="auto",
         test_paths=("tests/",),
+        exclude_paths=("tests/ruciopytest/*",),
     ),
 }
 
