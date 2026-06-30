@@ -11,6 +11,7 @@ jobs:
   runtime_images:
     uses: ./.github/workflows/runtime_images.yml
     permissions:
+      contents: read
       packages: write
 
   test:
