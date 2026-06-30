@@ -210,21 +210,68 @@ class InfraManager:
         self._sync_rses()
         self._sync_metadata()
 
+    def _multi_vo_pytest_cmd(self) -> list[str]:
+        """Build the per-VO child pytest argv, mirroring the legacy multi_vo run.
+
+        Legacy ``tools/run_multi_vo_tests_docker.sh`` runs each VO leg via
+        ``tools/pytest.sh -v --tb=short``. That wrapper (and therefore the
+        legacy multi_vo suite) executes with two properties our previous bare
+        ``pytest tests/`` did NOT reproduce -- both are pure execution-model
+        parity gaps in OUR harness, fixed here:
+
+        1. **xdist (the noparallel scheduler).** ``tools/pytest.sh`` runs the
+           suite under pytest-xdist (``--numprocesses=3`` on GitHub Actions,
+           ``auto`` locally). With xdist present, ``tests/conftest.py`` registers
+           the rucio noparallel scheduler, so ``@pytest.mark.noparallel`` tests
+           are isolated/grouped exactly as under legacy. Our prior bare serial
+           ``pytest tests/`` loaded NO xdist and NO scheduler -- a real
+           execution-model delta vs legacy multi_vo that changes test ordering
+           and cross-test isolation (the off-by-N shared-DB leaks and the
+           cross-scope attach failures seen on noparallel tests trace to this).
+
+        2. **exclusion of the Phase-8 plugin meta-tests.** This child runs
+           WITHOUT ``--suite`` (the rucio plugin is dormant), so
+           ``collection.py``'s ``exclude_paths`` filter -- which the in-process
+           suites rely on -- never applies. The new meta-tests under
+           ``tests/ruciopytest/`` (notably ``test_plugin_votest``, which
+           re-enters ``pytest_configure`` -> ``InfraManager.setup`` and purges
+           the LIVE DB mid-suite) would otherwise be collected and run here.
+           Translate the profile's ``exclude_paths`` into ``--ignore`` /
+           ``--ignore-glob`` so the child skips them -- matching what the
+           in-process suites already do (legacy never carried these files at
+           all, so this preserves legacy product-test selection exactly).
+        """
+        cmd = [sys.executable, "-m", "pytest", "tests/", "-v", "--tb=short"]
+
+        if self._profile.xdist_enabled:
+            procs = "3" if os.environ.get("GITHUB_ACTIONS") == "true" else "auto"
+            cmd += ["-p", "xdist", f"--numprocesses={procs}"]
+
+        for pattern in self._profile.exclude_paths:
+            cmd.append(f"--ignore-glob={pattern}")
+            # A trailing '/*' pattern also names the directory itself; ignore it
+            # outright so collection never descends into it.
+            if pattern.endswith("/*"):
+                cmd.append(f"--ignore={pattern[:-2]}")
+
+        return cmd
+
     def run_multi_vo(self) -> int:
         """Run the full ``tests/`` suite once per VO (tst, then ts2 on success).
 
         COMMITTED design: each VO leg is a CHILD ``python -m pytest`` process
-        (mirrors ``run_multi_vo_tests_docker.sh``'s ``pytest tests/ -v
-        --tb=short``). This keeps all ownership inside InfraManager with no
-        plugin.py change. Legacy "stop if tst fails" semantics are preserved:
-        ts2 only runs when tst passes, and there is NO 2nd DB reset.
+        (mirrors ``run_multi_vo_tests_docker.sh``'s ``tools/pytest.sh -v
+        --tb=short`` -- see :meth:`_multi_vo_pytest_cmd` for the xdist/exclusion
+        parity). This keeps all ownership inside InfraManager with no plugin.py
+        change. Legacy "stop if tst fails" semantics are preserved: ts2 only
+        runs when tst passes, and there is NO 2nd DB reset.
 
         Returns:
             The exit code of the tst run if it failed, otherwise the ts2 code.
         """
         TST_HOME = "/opt/rucio/etc/multi_vo/tst"
         TS2_HOME = "/opt/rucio/etc/multi_vo/ts2"
-        pytest_cmd = [sys.executable, "-m", "pytest", "tests/", "-v", "--tb=short"]
+        pytest_cmd = self._multi_vo_pytest_cmd()
 
         # --- VO tst ---
         self.bootstrap_vo(TST_HOME)

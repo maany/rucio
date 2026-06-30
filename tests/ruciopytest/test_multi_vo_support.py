@@ -144,6 +144,33 @@ def test_bootstrap_vo_sets_rucio_home(monkeypatch):
     assert "_bootstrap_test_data" in called
 
 
+def test_multi_vo_pytest_cmd_excludes_plugin_metatests_and_uses_xdist(monkeypatch):
+    """The per-VO child argv must (1) exclude tests/ruciopytest/* so the Phase-8
+    plugin meta-tests never run against the live DB, and (2) carry xdist so the
+    noparallel scheduler engages exactly as under legacy tools/pytest.sh."""
+    from tests.ruciopytest.infra_manager import InfraManager
+    from tests.ruciopytest.profiles import resolve_profile
+
+    profile = resolve_profile("multi_vo")
+    manager = InfraManager(profile, keep_db=False)
+
+    # CI parity: 3 procs under GitHub Actions.
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    cmd = manager._multi_vo_pytest_cmd()
+
+    # Exclusion of the plugin meta-tests (fixes the live-DB purge mid-suite).
+    assert "--ignore=tests/ruciopytest" in cmd
+    assert "--ignore-glob=tests/ruciopytest/*" in cmd
+    # xdist execution-model parity with legacy multi_vo.
+    assert "--numprocesses=3" in cmd
+    assert "tests/" in cmd
+
+    # Locally (no GitHub Actions) legacy uses auto workers.
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+    local_cmd = manager._multi_vo_pytest_cmd()
+    assert "--numprocesses=auto" in local_cmd
+
+
 def test_run_multi_vo_order_and_gate(monkeypatch):
     manager = _make_manager("multi_vo")
 
