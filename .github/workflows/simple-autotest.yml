@@ -96,13 +96,15 @@ jobs:
           PYTHON: ${{ matrix.python }}
           POLICY: ${{ matrix.policy }}
         run: |
+          set -o pipefail
+          mkdir -p test-results
           python -m pytest \
             --suite=${{ matrix.suite }} \
             --junitxml=test-results/${{ matrix.suite }}-py${{ matrix.python }}.xml \
             -r fExX \
             --log-level=DEBUG \
             -v --tb=short \
-            tests/
+            tests/ 2>&1 | tee test-results/${{ matrix.suite }}-py${{ matrix.python }}.pytest.log
 
       - name: Upload test results
         if: always()
@@ -118,6 +120,17 @@ jobs:
         with:
           name: container-logs-${{ matrix.suite }}-py${{ matrix.python }}
           path: .test-logs/
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Upload host logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: host-logs-${{ matrix.suite }}-py${{ matrix.python }}
+          path: |
+            .test-forward/
+            test-results/${{ matrix.suite }}-py${{ matrix.python }}.pytest.log
           retention-days: 7
           if-no-files-found: ignore
 
