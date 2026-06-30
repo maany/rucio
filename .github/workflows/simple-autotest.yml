@@ -197,6 +197,11 @@ jobs:
           COMPOSE="docker compose -p rucio-client-ci -f etc/docker/dev/docker-compose.yml -f etc/docker/dev/docker-compose.test.override.yml -f etc/docker/dev/docker-compose.ports.yml --profile postgres14"
           # Ensure the stack is up + bootstrapped (it may not be if host provisioning aborted early).
           $COMPOSE up -d --wait rucio
+          # The dev image mounts source at /rucio_source but does not install it;
+          # run_tests.sh -i (reset_database/alembic/bootstrap) and the client tests
+          # need rucio importable + the rucio CLI on PATH + etc fixtures in place.
+          $COMPOSE exec -T rucio pip install --no-cache-dir -e /rucio_source
+          $COMPOSE exec -T rucio bash -c 'ln -sf /rucio_source/bin/* /opt/venv/bin/ 2>/dev/null || true; for f in /rucio_source/etc/*; do n=$(basename "$f"); [ -e "/opt/rucio/etc/$n" ] || ln -sf "$f" "/opt/rucio/etc/$n"; done'
           $COMPOSE exec -T rucio tools/run_tests.sh -i
           # Legacy client path, run inside the rucio container; junit lands on the host
           # via the /rucio_source bind mount (= repo root) under test-results/.
@@ -224,6 +229,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: host-logs-${{ matrix.suite }}-py${{ matrix.python }}
+          # .test-forward/ is a dot dir holding the forwarded container's pytest
+          # stdout + JSONL report stream; include-hidden-files is required or the
+          # in-container traceback for a red leg is silently dropped.
+          include-hidden-files: true
           path: |
             .test-forward/
             test-results/${{ matrix.suite }}-py${{ matrix.python }}.pytest.log
