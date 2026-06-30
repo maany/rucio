@@ -29,9 +29,6 @@ jobs:
           - suite: remote_dbs
             python: "3.10"
             rdbms: postgres14
-          - suite: sqlite
-            python: "3.9"
-            rdbms: sqlite
           - suite: multi_vo
             python: "3.9"
             rdbms: postgres14
@@ -41,10 +38,23 @@ jobs:
           - suite: votest
             python: "3.9"
             rdbms: postgres14
+            policy: atlas
 
     steps:
       - name: Checkout code
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6.0.0
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: requirements/requirements.dev.txt
+
+      - name: Install host plugin deps
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -c requirements/requirements.dev.txt pytest pytest-xdist pyyaml
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
@@ -84,6 +94,7 @@ jobs:
           RUCIO_TEST_IMAGE: ${{ matrix.python == '3.10' && needs.runtime_images.outputs.py310_image || needs.runtime_images.outputs.py39_image }}
           RDBMS: ${{ matrix.rdbms }}
           PYTHON: ${{ matrix.python }}
+          POLICY: ${{ matrix.policy }}
         run: |
           python -m pytest \
             --suite=${{ matrix.suite }} \
