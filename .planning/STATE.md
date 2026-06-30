@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Productionize & Merge
-status: 08-02 shipped -- 5-leg matrix (sqlite dropped), setup-python + host plugin deps before forwarding pytest on every leg, votest policy=atlas/POLICY, per-leg junit report + on-failure host-log capture
-stopped_at: Completed 08-01-PLAN.md
-last_updated: "2026-06-30T11:02:21.358Z"
-last_activity: 2026-06-30 -- 08-02 executed
+status: 08-03 shipped -- host-side client leg gets full rucio install + reachable bootstrapped server (ports override + run_tests.sh -i) + rucio_client.cfg/cert wiring, with legacy-faithful in-container fallback on unreachable-server/import failure
+stopped_at: Completed 08-03-PLAN.md
+last_updated: "2026-06-30T11:11:06.638Z"
+last_activity: 2026-06-30 -- 08-03 executed
 progress:
   total_phases: 3
   completed_phases: 1
   total_plans: 7
-  completed_plans: 5
+  completed_plans: 6
   percent: 100
 ---
 
@@ -27,9 +27,9 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 
 Milestone: v1.1 Productionize & Merge (in progress)
 Phase: 8 of 9 (CI for real) -- in progress
-Plan: 08-02 complete (simple-autotest host-deps + artifacts); 08-01 prior
-Status: 08-02 shipped -- 5-leg matrix (sqlite dropped), setup-python + host plugin deps before forwarding pytest on every leg, votest policy=atlas/POLICY, per-leg junit report + on-failure host-log capture
-Last activity: 2026-06-30 -- 08-02 executed
+Plan: 08-03 complete (host-side client provisioning + in-container fallback); 08-02/08-01 prior
+Status: 08-03 shipped -- host-side client leg gets full rucio install + reachable bootstrapped server (ports override + run_tests.sh -i) + rucio_client.cfg/cert wiring, with legacy-faithful in-container fallback on unreachable-server/import failure
+Last activity: 2026-06-30 -- 08-03 executed
 
 Progress: v1.0 [██████████] 100% | v1.1 [██░░░░░░░░] 17%
 
@@ -71,6 +71,7 @@ Progress: v1.0 [██████████] 100% | v1.1 [██░░░░�
 | Phase 07 P02 | 9min | 3 tasks | 3 files |
 | Phase 08 P02 | 2min | 2 tasks | 1 files |
 | Phase 08 P01 | 6min | 2 tasks | 7 files |
+| Phase 08 P03 | 6 | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -128,6 +129,9 @@ Recent decisions affecting current work:
 - [Phase 08]: 08-02: votest leg gets policy=atlas via matrix.policy + POLICY env export; sqlite leg dropped -> 5-leg matrix
 - [Phase 08]: 08-02: pytest output tee'd to <leg>.pytest.log with set -o pipefail; on-failure host-logs artifact = .test-forward + pytest.log (alongside container .test-logs)
 - [Phase 08]: 08-01: sqlite removed from plugin SUITE_PROFILES/--suite choices and parity baseline+guard; legacy autotest CI keeps sqlite (untouched); generic rdbms_override != sqlite plumbing retained
+- [Phase 08]: 08-03: host-side client leg uses checked-in etc/certs/* host certs (sed-rewrite cfg) instead of copying certs out of the container
+- [Phase 08]: 08-03: single 'reachable' gate (httpd ping + host pytest --co) switches client between host-side run and legacy in-container fallback; both emit junit to test-results/
+- [Phase 08]: 08-03: bin/ prepended to PATH on host (no console_scripts in pyproject) so test_bin_rucio finds the rucio CLI
 
 ### Pending Todos
 
@@ -145,6 +149,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-30T11:02:21.356Z
-Stopped at: Completed 08-01-PLAN.md
+Last session: 2026-06-30T11:10:14.519Z
+Stopped at: Completed 08-03-PLAN.md
 Resume file: None
