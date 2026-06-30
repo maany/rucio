@@ -17,9 +17,9 @@ Requirements for the productionize-and-merge milestone. Delivery (history recons
 ### CI Execution
 
 - [ ] **CICD-05**: `simple-autotest.yml` installs host Python and plugin dependencies (setup-python + pytest/pytest-xdist) so every matrix leg starts (closes carried CICD-01)
-- [ ] **CICD-06**: host-side suites (`client`, `sqlite`) get a full rucio install on the runner so they execute (closes carried CICD-02)
+- [ ] **CICD-06**: the host-side `client` suite gets a full rucio install on the runner so it executes (closes carried CICD-02)
 - [ ] **CICD-07**: CI uploads junit XML artifacts and renders a per-leg test report for every matrix entry
-- [ ] **CICD-08**: all 6 `simple-autotest.yml` matrix legs pass green on a PR
+- [ ] **CICD-08**: all 5 `simple-autotest.yml` matrix legs pass green on a PR
 
 ### Documentation
 

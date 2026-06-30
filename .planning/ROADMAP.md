@@ -28,7 +28,7 @@ runs green with artifacts, plugin README, then clean rucio-convention stacked-PR
 to maany/rucio (delivery is a manual final step, not a phase).
 
 - [x] Phase 7: Suite-filtering parity — votest POLICY selection, multi_vo 2-VO config, parity guard (completed 2026-06-23)
-- [ ] Phase 8: CI for real — host deps install, full rucio for host suites, artifacts/junit, all 6 legs green
+- [ ] Phase 8: CI for real — host deps install, full rucio for host suites, artifacts/junit, all 5 legs green
 - [ ] Phase 9: Plugin docs — tests/ruciopytest/README.md
 
 ## Phase Details
@@ -49,14 +49,20 @@ to maany/rucio (delivery is a manual final step, not a phase).
 - [ ] 07-03-PLAN.md — import-free parity baseline + drift guard test (SUIT-09)
 
 ### Phase 8: CI for real
-**Goal**: `simple-autotest.yml` actually runs and goes green for all 6 matrix legs, with artifacts.
+**Goal**: `simple-autotest.yml` actually runs and goes green for all 5 matrix legs, with artifacts.
 **Depends on**: Phase 7
 **Requirements**: CICD-05, CICD-06, CICD-07, CICD-08
 **Success Criteria**:
   1. Each matrix leg installs host Python + plugin deps and reaches the pytest invocation
-  2. `client` and `sqlite` legs have a full rucio install and execute host-side
+  2. `client` leg has a full rucio install and executes host-side
   3. Every leg uploads junit XML and renders a test report
-  4. All 6 legs pass green on a PR to maany/rucio
+  4. All 5 legs pass green on a PR to maany/rucio
+
+**Plans:** 4 plans
+- [ ] 08-01-PLAN.md — sqlite descope (plugin profile + choices + parity baseline/guard) + docs + .gitignore (CICD-06 doc, CICD-08)
+- [ ] 08-02-PLAN.md — workflow: 5-leg matrix + setup-python/host plugin deps + votest POLICY + junit/artifacts/host-log capture (CICD-05, CICD-07)
+- [ ] 08-03-PLAN.md — host-side client provisioning: full rucio install + reachable bootstrapped server + cfg/certs + in-container fallback (CICD-06)
+- [ ] 08-04-PLAN.md — live CI green verification: push, gh-watch the 5-leg run, human-verify all green (CICD-08)
 
 ### Phase 9: Plugin docs
 **Goal**: A developer can learn to use the plugin from a README without reading the code.
