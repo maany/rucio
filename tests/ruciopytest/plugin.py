@@ -40,7 +40,7 @@ def pytest_addoption(parser: pytest.Parser) -> None:
     group = parser.getgroup("rucio", "Rucio test framework")
     group.addoption(
         "--suite",
-        choices=["client", "remote_dbs", "sqlite", "multi_vo", "votest"],
+        choices=["client", "remote_dbs", "multi_vo", "votest"],
         default=None,
         help="Test suite to run",
     )

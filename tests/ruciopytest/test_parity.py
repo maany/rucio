@@ -124,12 +124,12 @@ def test_policy_resolution() -> None:
 
 
 def test_baseline_parity() -> None:
-    """SUIT-09: client / remote_dbs / sqlite / multi_vo match the baseline."""
+    """SUIT-09: client / remote_dbs / multi_vo match the baseline."""
     baseline = load_baseline()
     client_paths = profiles.SUITE_PROFILES["client"].test_paths
     assert_set_equals(client_paths, baseline["client"], "client")
 
-    for name in ("remote_dbs", "sqlite", "multi_vo"):
+    for name in ("remote_dbs", "multi_vo"):
         assert_set_equals(full_tests(), baseline[name], name)
 
 

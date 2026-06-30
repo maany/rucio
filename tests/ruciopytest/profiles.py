@@ -66,16 +66,6 @@ SUITE_PROFILES: dict[str, SuiteProfile] = {
         default_workers_local="auto",
         test_paths=("tests/",),
     ),
-    "sqlite": SuiteProfile(
-        name="sqlite",
-        rdbms="sqlite",
-        compose_profiles=(),
-        xdist_enabled=False,
-        run_in_container=False,
-        default_workers_ci=0,
-        default_workers_local="0",
-        test_paths=("tests/",),
-    ),
     "multi_vo": SuiteProfile(
         name="multi_vo",
         rdbms="postgres14",
@@ -121,7 +111,7 @@ def resolve_profile(
     """Resolve a suite profile, optionally overriding the RDBMS.
 
     Args:
-        suite_name: One of the registered suite names (remote_dbs, sqlite,
+        suite_name: One of the registered suite names (remote_dbs,
             multi_vo, client, votest).
         rdbms_override: If provided, replaces the profile's default RDBMS
             and recalculates xdist compatibility. Used by CI matrix builds
