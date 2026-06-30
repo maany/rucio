@@ -307,23 +307,63 @@ class InfraManager:
             traceback.print_exc()
             raise RuntimeError("Failed to build database") from e
 
-    def _create_base_vo_and_root_account(self) -> None:
-        """Create the base VO and root account.
+    @staticmethod
+    def _is_already_exists_error(exc: Exception) -> bool:
+        """Return ``True`` when *exc* signals an idempotent already-exists insert.
 
-        Raises :class:`RuntimeError` on failure.
+        The multi_vo suite bootstraps each VO (tst, then ts2) against the SAME
+        shared schema after the main setup already created the base VO ``def``
+        and the root account. The per-VO re-create therefore hits a uniqueness
+        violation (e.g. ``UniqueViolation`` on ``VOS_PK``) -- which is benign and
+        must be swallowed rather than aborting collection.
         """
+        from rucio.common.exception import Duplicate, RucioException
+
+        if isinstance(exc, (Duplicate, RucioException)):
+            text = str(exc).lower()
+            if "duplicate" in text or "already exists" in text or "unique" in text:
+                return True
+        # SQLAlchemy IntegrityError / driver UniqueViolation surface by message.
+        text = (str(exc) + " " + type(exc).__name__).lower()
+        return (
+            "uniqueviolation" in text
+            or "integrityerror" in text
+            or "duplicate key" in text
+            or "already exists" in text
+        )
+
+    def _create_base_vo_and_root_account(self) -> None:
+        """Create the base VO and root account (idempotent).
+
+        Tolerates already-exists violations so the multi_vo per-VO bootstrap
+        (which reuses the schema/data created by the main setup) does not crash
+        on the second pass. Raises :class:`RuntimeError` only on genuine errors.
+        """
+        from rucio.db.sqla.session import get_session
         from rucio.db.sqla.util import create_base_vo, create_root_account
 
-        try:
-            print("[infra_manager] Creating base VO and root account")
-            create_base_vo()
-            create_root_account()
-            print("[infra_manager] Base VO and root account created")
-        except Exception as e:
-            print(f"[infra_manager] Failed to create base VO / root account: {e}")
-            import traceback
-            traceback.print_exc()
-            raise RuntimeError("Failed to build database") from e
+        print("[infra_manager] Creating base VO and root account")
+
+        for label, fn in (("base VO", create_base_vo), ("root account", create_root_account)):
+            try:
+                fn()
+                print(f"[infra_manager] Created {label}")
+            except Exception as e:
+                if self._is_already_exists_error(e):
+                    print(f"[infra_manager] {label} already exists, skipping")
+                    # A failed INSERT may leave the scoped session in an aborted
+                    # transaction; roll it back so subsequent work can proceed.
+                    try:
+                        get_session().remove()
+                    except Exception:
+                        pass
+                    continue
+                print(f"[infra_manager] Failed to create {label}: {e}")
+                import traceback
+                traceback.print_exc()
+                raise RuntimeError("Failed to build database") from e
+
+        print("[infra_manager] Base VO and root account ready")
 
     def _fix_sqlite_permissions(self) -> None:
         """Set ``/tmp/rucio.db`` to world-readable/writable (0o666).
@@ -337,6 +377,29 @@ class InfraManager:
         if os.path.exists(db_path):
             print(f"[infra_manager] Setting SQLite database permissions: {db_path}")
             os.chmod(db_path, 0o666)
+
+    def _resolve_live_rucio_cfg(self) -> str:
+        """Return the path to the live server ``rucio.cfg`` inside the container.
+
+        Tries, in order:
+          1. ``$RUCIO_HOME/etc/rucio.cfg`` -- the container install layout.
+          2. ``$RUCIO_HOME/rucio.cfg``    -- RUCIO_HOME already pointed at etc/.
+          3. ``/opt/rucio/etc/rucio.cfg`` -- the standard container fallback when
+             RUCIO_HOME was inherited from the host and is not a real path here.
+
+        The first existing candidate wins; otherwise the first candidate is
+        returned so the caller can raise a clear "not found" error.
+        """
+        rucio_home = os.environ.get("RUCIO_HOME", "/opt/rucio")
+        candidates = [
+            os.path.join(rucio_home, "etc", "rucio.cfg"),
+            os.path.join(rucio_home, "rucio.cfg"),
+            "/opt/rucio/etc/rucio.cfg",
+        ]
+        for candidate in candidates:
+            if os.path.exists(candidate):
+                return candidate
+        return candidates[0]
 
     def _apply_votest_policy(self) -> None:
         """Rewrite the live rucio.cfg ``[policy]`` section for votest.
@@ -352,8 +415,14 @@ class InfraManager:
         if not self._profile.policy or self._profile.name != "votest":
             return
 
-        # RUCIO_HOME already IS the live etc dir, so rucio.cfg sits directly in it.
-        rucio_cfg = os.path.join(os.environ["RUCIO_HOME"], "rucio.cfg")
+        # Resolve the live server rucio.cfg that httpd reads. Inside the runtime
+        # container the layout is ``$RUCIO_HOME/etc/rucio.cfg`` (RUCIO_HOME is the
+        # install root, e.g. /opt/rucio -- NOT the etc dir). When the forwarded
+        # run inherits a host RUCIO_HOME (e.g. /home/runner/work/rucio/rucio),
+        # that path does not exist in the container, so fall back to the standard
+        # container location. The rewrite must target the cfg the server actually
+        # loads so the httpd restart below picks up the new [policy] section.
+        rucio_cfg = self._resolve_live_rucio_cfg()
         matrix_path = (
             Path(os.environ["RUCIO_SOURCE_DIR"])
             / "etc/docker/test/matrix_policy_package_tests.yml"
