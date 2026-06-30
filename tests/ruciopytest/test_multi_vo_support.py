@@ -124,6 +124,7 @@ def test_bootstrap_vo_sets_rucio_home(monkeypatch):
 
     called = []
     for name in (
+        "_flush_memcache",
         "_create_base_vo_and_root_account",
         "_bootstrap_test_data",
         "_sync_rses",
@@ -142,6 +143,11 @@ def test_bootstrap_vo_sets_rucio_home(monkeypatch):
     assert "PURGE" not in called
     assert "BUILD" not in called
     assert "_bootstrap_test_data" in called
+    # Legacy parity: memcache flushed per VO (clears the VO-independent
+    # RSE-expression cache so 'MOCK' resolves under the second VO), BEFORE the
+    # data bootstrap.
+    assert "_flush_memcache" in called
+    assert called.index("_flush_memcache") < called.index("_bootstrap_test_data")
 
 
 def test_multi_vo_pytest_cmd_excludes_plugin_metatests_and_uses_xdist(monkeypatch):

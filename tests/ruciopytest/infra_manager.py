@@ -206,6 +206,17 @@ class InfraManager:
         ``ddmlab`` identity. All per-VO cfgs share the same ``[database]``
         target (postgres14/rucio, schema=dev), so the cached DB session is
         unaffected.
+
+        Also flushes memcache per VO, mirroring ``run_multi_vo_tests_docker.sh``
+        which ``echo flush_all`` before each VO's bootstrap. The RSE-expression
+        parser (``rucio.core.rse_expression_parser``) caches results under
+        ``sha256(expression)`` with NO VO in the key, then filters by VO
+        afterwards. When the tst run cached e.g. ``'MOCK'`` -> ``[MOCK@tst]``
+        (ts2's MOCK not yet created), the ts2 leg would get that stale,
+        VO-independent cache hit, filter it down to the empty set, and raise
+        ``InvalidRSEExpression: ... resulted in an empty set`` for every
+        ``rse_expression='MOCK'`` test (test_dataset_replicas et al.). Flushing
+        between VOs forces a recompute so ts2 resolves ``MOCK@ts2``.
         """
         os.environ["RUCIO_HOME"] = vo_home
         try:
@@ -213,6 +224,9 @@ class InfraManager:
             clean_cached_config()
         except Exception as e:  # pragma: no cover - defensive
             print(f"[infra_manager] Warning: could not clear cached config: {e}")
+        # Legacy parity: flush memcache before each VO bootstrap so the
+        # VO-independent RSE-expression cache cannot bleed across VOs.
+        self._flush_memcache()
         print(f"[infra_manager] Bootstrapping VO at RUCIO_HOME={vo_home}")
         self._create_base_vo_and_root_account()
         self._bootstrap_test_data()

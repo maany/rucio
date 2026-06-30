@@ -139,7 +139,13 @@ def build_inner_pytest_args(argv: List[str]) -> List[str]:
 # ---------------------------------------------------------------------------
 
 # Curated allowlist of environment variables forwarded into the container.
-_ENV_ALLOWLIST_EXACT = frozenset({"SUITE", "POLICY", "RDBMS"})
+# GITHUB_ACTIONS is forwarded so the in-container run (and the multi_vo per-VO
+# xdist children it spawns) detect CI and cap workers at 3 -- legacy
+# tools/pytest.sh and InfraManager._multi_vo_pytest_cmd both key the
+# "3 procs on CI vs auto locally" decision on GITHUB_ACTIONS=="true", which is
+# otherwise invisible inside the forwarded container (auto -> too many DB
+# connections -> postgres "too many clients").
+_ENV_ALLOWLIST_EXACT = frozenset({"SUITE", "POLICY", "RDBMS", "GITHUB_ACTIONS"})
 _ENV_ALLOWLIST_PREFIXES = ("RUCIO_",)
 
 
