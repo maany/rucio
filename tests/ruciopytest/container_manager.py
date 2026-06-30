@@ -103,6 +103,7 @@ class ContainerManager:
         self._compose_up()
         self._started = True
         self._install_rucio_from_source()
+        self._bootstrap_rucio_home()
         self._restart_httpd()
         self._wait_for_readiness()
 
@@ -179,6 +180,45 @@ class ContainerManager:
             print(f"[container_manager] Warning: pip install failed:\n{result.stderr}")
         else:
             print("[container_manager] Rucio installed from source")
+
+    def _bootstrap_rucio_home(self) -> None:
+        """Bridge the mounted source ``bin/`` and ``etc/`` into ``RUCIO_HOME``.
+
+        The dev compose mounts the repo at ``/rucio_source`` while
+        ``RUCIO_HOME=/opt/rucio``, and the container entrypoint only generates
+        ``rucio.cfg``/``alembic.ini`` there. Legacy autotest instead runs from a
+        ``/opt/rucio`` that already contains the full source tree, so tests can
+        resolve the ``rucio`` CLI on ``PATH`` and read fixtures under
+        ``$RUCIO_HOME/etc`` (``mail_templates/``, ``rse_repository.json``,
+        ``google-cloud-storage-test.json``, ...). Without this bridge the
+        forwarded suites hit ``rucio: command not found`` (exit 127) on every
+        CLI test and ``FileNotFoundError`` on every fixture lookup.
+
+        Symlink the source ``bin/*`` onto the venv ``bin`` (already first on
+        ``PATH``) and fill in any *missing* ``$RUCIO_HOME/etc`` entries -- never
+        clobbering the entrypoint-generated ``rucio.cfg``/``alembic.ini``.
+        """
+        script = (
+            "ln -sf /rucio_source/bin/* /opt/venv/bin/ 2>/dev/null || true; "
+            "for f in /rucio_source/etc/*; do "
+            'n=$(basename "$f"); '
+            '[ -e "/opt/rucio/etc/$n" ] || ln -sf "$f" "/opt/rucio/etc/$n"; '
+            "done"
+        )
+        cmd = self._compose_cmd("exec", "-T", "rucio", "bash", "-c", script)
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+        except subprocess.TimeoutExpired:
+            print("[container_manager] Warning: RUCIO_HOME bootstrap timed out")
+            return
+
+        if result.returncode != 0:
+            print(
+                "[container_manager] Warning: RUCIO_HOME bootstrap failed:\n"
+                f"{result.stderr}"
+            )
+        else:
+            print("[container_manager] Bridged source bin/ + etc/ into RUCIO_HOME")
 
     def _restart_httpd(self) -> None:
         """Restart httpd inside the rucio container after rucio installation."""
