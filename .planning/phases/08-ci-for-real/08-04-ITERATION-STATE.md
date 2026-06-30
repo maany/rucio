@@ -90,6 +90,137 @@ NOTE for next run triage:
 4. remote_dbs junit-XML PermissionError: make container pytest able to write test-results/ junit (fix host-mounted dir perms / UID, or write junit to a container path then copy). Leg can't go green until container pytest exits 0.
 5. remote_dbs residual 9: AFTER 1-4, re-run and re-examine. For each, determine if it fails the SAME way under LEGACY autotest (check tools/test/test.sh + legacy autotest.yml selection / known xfail-skip). If legacy is green on it → it's an infra delta (missing daemon/service in our bring-up) → IN SCOPE fix. If legacy also fails/xfails it identically → OUT OF SCOPE, inherit. Do NOT patch the product tests themselves.
 
+## Run 28452774335 (sha da28886d7, items 1-4) — conclusion: failure BUT all 4 fixes worked
+client = SUCCESS (green). All other legs ADVANCED past their prior crashes.
+
+| Leg | Now |
+|-----|-----|
+| client 3.9 | GREEN ✓ (the rucio_${RDBMS}.cfg [database] append fixed it) |
+| votest 3.9 | collects+runs: 328 passed, 6 failed, 65 skipped, 1 xfail |
+| multi_vo 3.9 | collects+runs: 1157 passed, 101 failed, 416 skipped |
+| remote_dbs 3.9/3.10 | PermissionError GONE; 1244 passed, 9 failed, 414 skipped (identical) |
+
+### Shared root causes of remaining failures
+A. `data13_hip` scope FK — reaper ×5 (remote_dbs AND votest). test_reaper.py hardcodes scope `data13_hip`
+   (lines 78,116,386,446,472), never creates it (no scope_factory). bootstrap_tests.py adds an explicit
+   scope list ONLY for belleii policy; atlas/tst gets only jdoe/mock + root/archive. => provision data13_hip
+   (or mirror however legacy makes it exist). VERIFY legacy creates it before assuming in-scope.
+B. mock RSEs not provisioned — test_cli_client_structure::test_rse InvalidRSEExpression "empty set"
+   (remote_dbs AND votest). Legacy runs tools/docker_activate_rses.sh; simple pipeline doesn't. => run RSE
+   activation as part of bring-up (mirror legacy).
+C. multi_vo CannotAuthenticate to account root (~90 of multi_vo's 101) across test_bin_rucio,
+   test_cli_client_structure, TestOpenDataCLI, TestRucioServer, test_upload. Per-VO root creds / client cfg
+   don't match the multi_vo server. => multi_vo client-auth wiring delta. Biggest multi_vo lever.
+   (multi_vo also has a few test_bb8 ScopeNotFound + the shared 5× reaper FK.)
+
+### Needs legacy-parity DECISION (match legacy, do NOT stand up new services)
+D. test_oidc (assert None == token) — needs OIDC IdP/IAM. Legacy gates OIDC behind needs_iam marker /
+   separate integration workflow. If legacy does NOT run oidc in the standard suite, INHERIT the skip
+   (match legacy selection), don't stand up IAM. CHECK legacy selection/markers.
+E. TestJudgeRepairer ConnectionRefused [Errno 111] — needs a listening service legacy provides. CHECK
+   whether legacy runs/skips it in this suite; match.
+F. test_plugin_votest::test_votest_configure_stashes_atlas_test_paths "Failed to purge database" — our OWN
+   plugin meta-test that purges the live DB mid-suite. Self-inflicted: this meta-test should not run inside
+   the live product suite (it's a unit test of the plugin). Exclude it from the suite selection / mark it so
+   it doesn't run against the live test DB.
+
+### Next batch plan (items 6-9)
+6. Provision `data13_hip` scope in bring-up (clears reaper ×5 on remote_dbs + votest). Mirror legacy.
+7. Run mock-RSE activation (tools/docker_activate_rses.sh) in bring-up (clears test_rse on remote_dbs + votest).
+   -> 6+7 should make VOTEST GREEN and drop remote_dbs to ~3 (judge, oidc, plugin_votest meta-test).
+8. multi_vo client-auth: make per-VO client cfg/root creds authenticate to the multi_vo server (clears ~90).
+9. Legacy-parity for oidc/judge/plugin-votest-meta: inspect legacy selection (tools/test/test.sh,
+   autotest.yml, pytest markers needs_iam/skip/xfail) and MATCH it (inherit skips / exclude meta-test),
+   rather than building new services. Document each decision.
+
+## Batch applied on top of da28886d7 (items 6/7/9) — pushed, awaiting run
+Grounded on the artifact for run 28452774335 (host-logs-remote_dbs-py3.9):
+exact tracebacks read for every residual. KEY DISCOVERY: missing **memcached**
+is the single root cause behind THREE of the "decision" residuals, and the
+mock-RSE-activation hypothesis (old item 7) was WRONG.
+
+- 36d0346cb  fix(08-04): memcached + data13_hip scope in container bring-up
+  - **memcached (legacy parity, IN SCOPE).** infra_manager.setup() now starts
+    `memcached -u root -d` (new `_start_memcache`, idempotent) mirroring
+    run_tests.sh:17. Live cfg keeps `[cache] url = 127.0.0.1:11211`
+    (rucio.common.cache.CACHE_URL default), so the dogpile MemcacheRegion is
+    REQUIRED in-container. Our plugin path replaced run_tests.sh and never
+    started it. Evidence from the artifact:
+      * `test_oidc::test_token_cache` -> `assert None == 'eyJ...'`: the OIDC token
+        cache IS memcache-backed; set/get to a dead socket -> get None. NOT an
+        IAM/OIDC dependency (hypothesis D was wrong; test_oidc has no needs_iam
+        marker and legacy runs it in the standard suite — it passes there only
+        because legacy starts memcached).
+      * `TestJudgeRepairer` -> `ConnectionRefused [Errno 111]` straight out of
+        `region.delete` -> pymemcache `_connect` to 127.0.0.1:11211 (hypothesis
+        E: the "listening service legacy provides" = memcached).
+      * `test_cli_client_structure::test_rse` -> `InvalidRSEExpression: empty
+        set` at line 694 `list_rses(rse_name)` AFTER `rse remove`. Mechanism:
+        parse_expression() caches results in MemcacheRegion (expiry 600s). With
+        memcache UP, line 669's lookup caches {rse}; after removal line 694 is a
+        cache HIT -> returns the cached list, no re-eval, assert passes (== legacy).
+        With memcache DOWN every call is a MISS, so line 694 re-evaluates the
+        now-removed RSE -> empty set -> raises. So test_rse is ALSO a memcache
+        delta, NOT a mock-RSE-provisioning gap. The test creates+removes its OWN
+        RSE, so docker_activate_rses.sh would not affect it.
+  - **data13_hip scope (legacy parity, IN SCOPE).** Verified legacy creates it:
+    `tools/sync_meta.py:61-65` does `c.add_scope('root', value)` for every
+    `project` metadata value. infra_manager._sync_metadata() omitted that.
+    Added it (Duplicate-tolerant). Artifact proof: reaper x5 fail with
+    `ForeignKeyViolation DIDS_SCOPE_FK: Key (scope)=(data13_hip) not present in
+    table "scopes"`.
+- 3d5e61aed  fix(08-04): exclude_paths=('tests/ruciopytest/*',) on
+  remote_dbs/multi_vo/votest. test_plugin_votest meta-test re-enters
+  plugin.pytest_configure (in-container -> manager.setup() -> _purge_database)
+  and purges the live DB mid-suite ("Failed to purge database"). These plugin
+  meta-tests are new Phase-8 additions legacy never collected; standalone runs
+  unaffected (plugin dormant without --suite). votest already excluded them via
+  explicit matrix test_paths; this is belt-and-suspenders + the real fix for the
+  tests/-glob suites.
+
+### Legacy-parity DECISIONS this batch (each from artifact + legacy evidence)
+- **item 7 / mock-RSE activation: DO NOT DO IT.** Legacy `tools/test/test.sh`
+  runs `run_tests.sh` WITHOUT `-r` for remote_dbs/votest/multi_vo, so legacy
+  NEVER runs docker_activate_rses.sh in these suites (it needs XRD/FTS storage
+  containers absent here). The test_rse failure it was meant to fix is actually
+  the memcache delta above. Standing up RSE activation would be NON-faithful.
+- **test_oidc::test_token_cache: FIX (memcache), not inherit-skip.** It is not an
+  IAM test; it round-trips the memcache token cache. Fixed by starting memcached.
+- **TestJudgeRepairer: FIX (memcache).** Legacy runs it and passes because
+  run_tests.sh starts memcached; our delta was the missing daemon.
+- **test_plugin_votest meta-test: EXCLUDE from live suite.** Self-inflicted
+  plugin unit test; not a legacy product test.
+
+Expected after this run: data13_hip clears reaper x5 (remote_dbs + votest);
+memcached clears test_rse + test_oidc + judge; exclusion clears the plugin
+meta-test. remote_dbs 9 residuals should -> 0 (GREEN). votest 6 -> likely 0
+(GREEN). multi_vo still has the ~90 CannotAuthenticate (item 8, deferred) plus
+the now-fixed reaper x5 / cache tests.
+
+### Item 8 (multi_vo CannotAuthenticate) — root-cause note for next batch (DEFERRED)
+Skimmed run_multi_vo / per-VO bootstrap + legacy run_multi_vo_tests_docker.sh:
+- Legacy (run_multi_vo_tests_docker.sh) for the tst VO does a FULL
+  `tools/reset_database.py` (line 67) WITH `RUCIO_HOME=/opt/rucio/etc/multi_vo/tst`
+  ACTIVE (cfg has multi_vo=True, vo=testvo1). So create_base_vo/create_root_account
+  AND bootstrap_tests.py's `add_vo(issuer='super_root', vo=DEFAULT_VO)` all run
+  under the multi_vo config, provisioning super_root + the per-VO root identity.
+  ts2 then re-bootstraps with NO second DB reset.
+- OUR infra_manager builds the DB once in the MAIN setup() (under the default
+  /opt/rucio cfg, multi_vo possibly false), creates base VO `def` + root there,
+  THEN run_multi_vo() re-bootstraps tst/ts2 over that schema. Our item-2
+  idempotency guard makes `_create_base_vo_and_root_account` SWALLOW already-exists
+  on the per-VO pass — which likely MASKS provisioning of each VO's root userpass
+  identity. The client cfg authenticates as username=ddmlab/password=secret →
+  account=root (rucio_autotests_common.cfg); `create_root_account()` (lib/rucio/
+  db/sqla/util.py:168-187) wires that ddmlab userpass identity. If testvo1/testvo2
+  root never gets the ddmlab identity (because add_vo ran under the wrong
+  cfg/issuer context, or the guard skipped it), the client gets CannotAuthenticate.
+- Next batch: make the DB build/bootstrap happen with RUCIO_HOME pointed at the
+  tst (multi_vo) cfg BEFORE create_base_vo/root (mirror reset under tst), and
+  verify add_vo provisions each VO root's ddmlab userpass identity (or add it
+  explicitly per VO in bootstrap_vo). Confirm a `super_root` account+identity
+  exists in `def` so add_vo(issuer='super_root') succeeds.
+
 ## Watch protocol
 - After pushing, hand orchestrator the new sha + run id. Orchestrator watches and returns per-leg results + artifacts.
 - Useful: gh run view <id> --repo maany/rucio --json jobs --jq '.jobs[]|"\(.databaseId) \(.name) \(.conclusion)"'
