@@ -205,7 +205,16 @@ jobs:
           $COMPOSE exec -T rucio tools/run_tests.sh -i
           # Legacy client path, run inside the rucio container; junit lands on the host
           # via the /rucio_source bind mount (= repo root) under test-results/.
-          $COMPOSE exec -T rucio bash -lc "cp etc/docker/test/extra/rucio_client.cfg /opt/rucio/etc/rucio.cfg && tools/pytest.sh -v --tb=short tests/test_clients.py tests/test_bin_rucio.py tests/test_module_import.py --junitxml=/rucio_source/test-results/client-py${{ matrix.python }}.xml" 2>&1 | tee test-results/client-py${{ matrix.python }}.pytest.log
+          #
+          # rucio_client.cfg ships no [database] section, but test_bin_rucio's
+          # server-side fixtures (rse_factory / did_factory / db_session) talk to
+          # the DB directly -- they need one (else configparser.NoSectionError:
+          # 'database'). Legacy ran these inside the server container where the
+          # entrypoint-generated rucio.cfg carried [database]; the cp clobbered it.
+          # Re-append the rdbms [database] block (the same source the entrypoint
+          # used: etc/docker/test/extra/rucio_${RDBMS}.cfg, which is [database]-only)
+          # so the active cfg has both the client wiring and a working DB section.
+          $COMPOSE exec -T -e RDBMS="$RDBMS" rucio bash -lc 'cp etc/docker/test/extra/rucio_client.cfg /opt/rucio/etc/rucio.cfg && cat "etc/docker/test/extra/rucio_${RDBMS:-postgres14}.cfg" >> /opt/rucio/etc/rucio.cfg && tools/pytest.sh -v --tb=short tests/test_clients.py tests/test_bin_rucio.py tests/test_module_import.py --junitxml=/rucio_source/test-results/client-py'"${{ matrix.python }}"'.xml' 2>&1 | tee test-results/client-py${{ matrix.python }}.pytest.log
 
       - name: Upload test results
         if: always()
