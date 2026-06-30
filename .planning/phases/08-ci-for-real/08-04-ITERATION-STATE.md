@@ -299,6 +299,67 @@ Expected next: _build_database() succeeds under tst cfg -> per-VO bootstrap runs
 (validates super_root/ddmlab) -> multi_vo tests execute. Residual if any: a few
 test_bb8 ScopeNotFound = OUT OF SCOPE / inherit legacy; do NOT patch product tests.
 
+### Batch applied on top of dd159a417 — the last 3 multi_vo failures
+Context at start: 4/5 legs GREEN; multi_vo fully bootstraps + runs (tst sub-run
+1232 passed / 378 skipped / 2 failed, +1 in the plugin pass). 3 child-run
+failures to close:
+  (a) tests/ruciopytest/test_plugin_votest.py::test_votest_configure_stashes_atlas_test_paths
+      -> "Failed to purge database" (DROP TYPE ... DependentObjectsStillExist)
+  (b) tests/test_bad_replica.py::test_rest_bad_replica_methods_for_ui  (assert 369==364, off-by-5)
+  (c) tests/test_did.py::TestDIDClients::test_list_recursive (cross-scope attach -> masked DatabaseException)
+
+ROOT-CAUSE (single shared cause for all 3 = OUR harness execution-model delta):
+`run_multi_vo()` spawned the per-VO child as a BARE **serial** `pytest tests/ -v
+--tb=short` with NO `--suite`. Two consequences, both pure infra/harness-parity
+gaps vs legacy `tools/run_multi_vo_tests_docker.sh` -> `tools/pytest.sh -v --tb=short`:
+  1. No `--suite` => rucio plugin dormant in the child => collection.py's
+     exclude_paths filter never applied => the Phase-8 plugin meta-test
+     `test_plugin_votest` was COLLECTED and run. Inside the container its
+     `_in_container` branch (`/.dockerenv` exists) re-enters
+     `plugin.pytest_configure -> InfraManager.setup -> _purge_database`, purging
+     the LIVE DB mid-suite => failure (a).
+  2. Bare `pytest` ran SERIALLY with NO xdist. Legacy `tools/pytest.sh` runs the
+     suite under pytest-xdist (`--numprocesses=3` on GitHub Actions, `auto`
+     locally); with xdist present `tests/conftest.py:76-79` registers the rucio
+     **noparallel scheduler** so `@pytest.mark.noparallel` tests are isolated/
+     ordered exactly as under legacy. Both (b) and (c) ARE noparallel tests
+     (`test_bad_replica` noparallel 'runs minos, acts on all bad pfns';
+     `test_list_recursive` noparallel 'uses pre-defined scope names'); their
+     shared-DB off-by-5 leak / cross-scope masked DatabaseException are
+     execution-model/ordering symptoms of running serially without the
+     scheduler that legacy uses. => IN-SCOPE harness parity (the scope rule
+     explicitly lists "execution-model/xdist isolation differing from legacy" as
+     in-scope to fix).
+
+FIX (infra-only, `tests/ruciopytest/infra_manager.py`): new
+`_multi_vo_pytest_cmd()` builds the per-VO child argv to mirror legacy:
+  - xdist parity: `-p xdist --numprocesses=3` (GITHUB_ACTIONS) / `=auto` locally,
+    gated on `profile.xdist_enabled`. This re-engages the noparallel scheduler.
+  - exclusion parity: translate `profile.exclude_paths` (`tests/ruciopytest/*`)
+    into `--ignore-glob=tests/ruciopytest/*` + `--ignore=tests/ruciopytest`, so
+    the child skips the plugin meta-tests (legacy never carried these files, so
+    this preserves legacy product-test selection exactly).
+`run_multi_vo()` now calls the helper. Added unit test
+`test_multi_vo_pytest_cmd_excludes_plugin_metatests_and_uses_xdist`.
+
+PARITY VERDICTS:
+- (a) IN-SCOPE, FIXED. Definitive: our exclusion didn't reach the child run.
+  Preferred per item-9 decision (exclude the meta-test from the live suite, NOT
+  make mid-suite purge work). Verified locally: child argv now carries the
+  ignores; test_plugin_votest + test_multi_vo_support + forwarding stay green.
+- (b)/(c) IN-SCOPE harness delta (serial-no-xdist vs legacy xdist+noparallel
+  scheduler), addressed by the xdist parity fix. NOTE: cannot prove locally
+  (needs the live DB/container) that xdist fully clears them — the live CI run
+  is the verification. Justification stands independently as faithfulness
+  (legacy multi_vo demonstrably runs per-VO with xdist; we didn't). IF either
+  survives under faithful xdist execution, that's the signal it's an inherited
+  product failure legacy also exhibits -> bring the inherit decision to the user
+  (do NOT patch test_bad_replica / test_did).
+
+Local sanity: infra_manager AST+import OK; test_multi_vo_support.py +
+test_plugin_votest.py 9 passed; test_forwarding.py 41 passed/1 skipped.
+Pushed NORMAL (no force). Awaiting orchestrator watch.
+
 ## Watch protocol
 - After pushing, hand orchestrator the new sha + run id. Orchestrator watches and returns per-leg results + artifacts.
 - Useful: gh run view <id> --repo maany/rucio --json jobs --jq '.jobs[]|"\(.databaseId) \(.name) \(.conclusion)"'
