@@ -81,6 +81,17 @@ _HOST_ONLY_FLAGS = frozenset({"--run-in-container", "--no-run-in-container"})
 _CONTAINER_ENV_FLAG = "--container-env"
 _CONTAINER_ENV_ATTACHED_PREFIX = _CONTAINER_ENV_FLAG + "="
 
+# --junitxml is host-only: the host's junitxml plugin already builds the report
+# from the replayed container reports (FWD-06), writing it at the host path.
+# Forwarding the flag makes the *container's* pytest ALSO write to the same
+# host-mounted path; on CI the container user's UID differs from the runner's,
+# so that second write fails with PermissionError [Errno 13] and forces a
+# nonzero container exit even when every test passes. Strip it so only the host
+# (which owns the path) produces the junit XML. Split form ("--junitxml PATH")
+# and attached form ("--junitxml=PATH") are both removed.
+_JUNITXML_FLAG = "--junitxml"
+_JUNITXML_ATTACHED_PREFIX = _JUNITXML_FLAG + "="
+
 
 def build_inner_pytest_args(argv: List[str]) -> List[str]:
     """Return ``argv`` with host-only forwarding-control flags removed.
@@ -89,9 +100,11 @@ def build_inner_pytest_args(argv: List[str]) -> List[str]:
       * ``--run-in-container`` / ``--no-run-in-container`` (store flags)
       * ``--container-env VALUE`` (split form: flag and its value)
       * ``--container-env=VALUE`` (attached form)
+      * ``--junitxml VALUE`` / ``--junitxml=VALUE`` (host writes junit; the
+        container must not also write to the host-mounted path -- PermissionError)
 
     Everything else -- ``--suite``, ``--keep-db``, ``--xdist-workers``, ``-k``,
-    ``-m``, ``-x``, ``-v``, ``--junitxml``, ``--co``, ``--dry-run`` and test paths --
+    ``-m``, ``-x``, ``-v``, ``--co``, ``--dry-run`` and test paths --
     passes through in its original order.
     """
     result: List[str] = []
@@ -107,6 +120,13 @@ def build_inner_pytest_args(argv: List[str]) -> List[str]:
             i += 2
             continue
         if token.startswith(_CONTAINER_ENV_ATTACHED_PREFIX):
+            i += 1
+            continue
+        if token == _JUNITXML_FLAG:
+            # Skip the flag and its following path value.
+            i += 2
+            continue
+        if token.startswith(_JUNITXML_ATTACHED_PREFIX):
             i += 1
             continue
         result.append(token)

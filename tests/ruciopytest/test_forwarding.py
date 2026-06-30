@@ -323,8 +323,21 @@ def test_build_inner_args_strips_attached_and_run_in_container():
 
 
 def test_build_inner_args_passes_everything_else_through():
-    argv = ["--co", "--dry-run", "--junitxml=out.xml", "-x", "-vv", "tests/"]
+    # --junitxml is host-only (host owns the mounted path; the container must not
+    # also write there). Everything else flows through in order.
+    argv = ["--co", "--dry-run", "-x", "-vv", "tests/"]
     assert build_inner_pytest_args(argv) == argv
+
+
+def test_build_inner_args_strips_junitxml_attached_and_split():
+    # Attached form is dropped.
+    assert build_inner_pytest_args(
+        ["--suite=remote_dbs", "--junitxml=test-results/remote_dbs.xml", "tests/"]
+    ) == ["--suite=remote_dbs", "tests/"]
+    # Split form drops both the flag and its path value.
+    assert build_inner_pytest_args(
+        ["--suite=remote_dbs", "--junitxml", "test-results/remote_dbs.xml", "tests/"]
+    ) == ["--suite=remote_dbs", "tests/"]
 
 
 # ---------------------------------------------------------------------------
