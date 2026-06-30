@@ -366,3 +366,116 @@ Pushed NORMAL (no force). Awaiting orchestrator watch.
   gh run view --repo maany/rucio --job <id> --log-failed | tail -150
   gh run download <id> --repo maany/rucio -n host-logs-<leg>-py3.9 -D <dir>  (then read .test-forward/*.container-stdout.log)
 - No force-push (histories aligned). No fabricated green.
+
+## LOCAL REPRO + VERIFICATION (sha 282ce5a43, no push) — multi_vo double-exec + test_did
+
+Goal: reproduce the multi_vo leg LOCALLY, root-cause the `test_did` unknown from
+the SERVER log, develop+verify the wiring fix, report BEFORE pushing. CI is slow
+(~30 min); local repro lets us read the apache/wsgi error behind the masked
+DatabaseException and iterate fast.
+
+### Local repro setup (WORKED)
+- Host driver venv: system `python3.12` venv (no 3.9 on host; pyenv only had
+  3.13) with `pytest==7.4.3 pytest-xdist==3.5.0 pyyaml` — pytest pinned to EXACTLY
+  the container's (7.4.3) so the report-stream round-trip is faithful. Plugin
+  imports OK under it.
+- Image `rucio-test:local` (entrypoint final target, PYTHON=3.9, RUCIO_HOME=
+  /opt/rucio, RUCIO_SOURCE_DIR=/rucio_source) used as RUCIO_TEST_IMAGE — works.
+- Stack: `docker compose -p rucio-test-multi_vo-postgres14 -f dev/docker-compose.yml
+  -f dev/docker-compose.test.override.yml --profile postgres14 up -d --wait`
+  (the `-p` overrides the override's `name: dev`, so the user's `rucio-dev` and
+  other non-`rucio-test-*` projects are untouched). Then pip install -e
+  /rucio_source + bridge bin/etc + httpd graceful (mirrors ContainerManager).
+- To root-cause cheaply WITHOUT the ~35-min triple-suite, drove InfraManager
+  base bring-up with `run_multi_vo` monkeypatched to a no-op, then ran the single
+  failing test under RUCIO_HOME=tst.
+
+### test_did::test_list_recursive — ROOT CAUSE (the UNKNOWN) — IN-SCOPE, FIXED
+SERVER-side apache/wsgi log (the real error behind the masked
+`DatabaseException: An unknown Database Exception has occurred`):
+```
+psycopg.errors.StringDataRightTruncation: value too long for type character varying(25)
+[SQL: INSERT INTO "TEMPORARY_SCOPE_NAME_0" (scope, name) VALUES (...)]
+[parameters: {'scope': 'list-did-recursive-4ba44d@tst', ...}]
+```
+- The test hardcodes a 25-char scope (`('list-did-recursive-%s'%uuid)[:25]`,
+  upstream since 2021, identical in master, NOT a recent change, NO multi_vo
+  skip). In multi_vo the INTERNAL scope is `<scope>@<vo>` = 25 + `@tst` = 29 chars
+  -> overflows the 25-char `TEMPORARY_SCOPE_NAME` column the recursive-list /
+  bulk-attach path builds.
+- VERDICT: **infra/config delta in OUR bring-up, IN-SCOPE.** The schema module is
+  picked by `[common] multi_vo` (`rucio.common.schema.__init__._is_multivo` ->
+  `generic_multi_vo` SCOPE_LENGTH=**29** vs `generic` SCOPE_LENGTH=**25**). Our
+  LIVE SERVER cfg `/opt/rucio/etc/rucio.cfg` (the one httpd/WSGI loads; its
+  RUCIO_HOME=/opt/rucio is fixed at daemon-master start, so pointing the harness
+  env at the per-VO cfg does NOT change it) had NO `multi_vo` and no multi_vo
+  schema -> server resolved SCOPE_LENGTH=25 -> overflow. The per-VO cfg
+  (client-side, RUCIO_HOME=tst) DID have multi_vo=True + schema=generic_multi_vo
+  (that's why client auth/add_scope worked) — only the SERVER was single-VO.
+- Legacy `run_multi_vo_tests_docker.sh` avoids this by `export RUCIO_HOME=tst`
+  BEFORE the httpd it serves under -> server uses generic_multi_vo (29). We never
+  made the live server cfg multi_vo-aware. **This is NOT an xdist/noparallel
+  symptom** (the prior batch's theory for (c) was wrong): it fails IDENTICALLY
+  serial AND xdist, because it is a server-schema/config bug.
+- PROVEN locally: after writing `[common] multi_vo=True` +
+  `[policy] permission/schema=generic_multi_vo` into the live server cfg and
+  `httpd -k graceful`, server SCOPE_LENGTH 25 -> 29 and
+  `test_did::TestDIDClients::test_list_recursive` PASSED **serially** (1 passed).
+- FIX: `InfraManager._apply_multi_vo_server_config()` (new) copies the multi_vo
+  markers from the generated tst cfg into the live server cfg, called for
+  multi_vo BEFORE `_restart_httpd()`.
+
+### Double-execution — REPRODUCED (structural) + WIRING FIX
+Confirmed from code + run structure: the multi_vo leg executed the suite TWICE+:
+`run_multi_vo()` spawned per-VO CHILD pytest (Session A: xdist + noparallel +
+`--ignore-glob tests/ruciopytest/*`) — the faithful, legacy-equivalent run —
+but its rc was DISCARDED, AND the outer forwarded in-container Session B then
+collected+ran the suite again SERIALLY (no xdist), and Session B's stream is what
+the host/junit gated on. (Note: the in-container Session B for ALL suites runs
+SERIAL — `configure_xdist` only sets the host config.option, never the forwarded
+argv; only run_multi_vo's children carry `-p xdist`.) So CI gated on the wrong,
+serial pass — which is why (b) test_bad_replica off-by-5 and (d)
+test_bin_rucio::test_import_data (both `@noparallel`) failed there but pass under
+Session A's xdist.
+- FIX (gate on Session A, single execution):
+  1. `setup()` stores `self._multi_vo_rc = run_multi_vo()`.
+  2. `run_multi_vo()`: the **tst** child streams its reports to the host
+     (`forward_stream=True` -> child argv gets
+     `-p tests.ruciopytest.forward_stream_plugin`, new module that registers the
+     report emitter on the xdist CONTROLLER only); **ts2** runs with
+     RUCIO_FORWARD_STREAM stripped (replaying the same node ids twice would
+     corrupt the host junit) but still gates via the aggregate rc (legacy
+     "tst must pass then ts2 must pass").
+  3. `plugin.pytest_configure` (in-container multi_vo): after `setup()`, set
+     `config.args=[]` (suppress the outer session's own collection) + stash the
+     rc; `pytest_runtestloop` then `finalize_host_exit(session, rc)` so the outer
+     session exits with the children's aggregate code. No redundant serial pass;
+     host junit now reflects the tst xdist+noparallel execution.
+  4. `forwarding.ReportStreamEmitter.emit` drops the xdist-only `report.node`
+     (WorkerController, not JSON-serializable) + `json.dumps(default=str)` — the
+     emitter had never run under xdist before (Session B was always serial), so
+     this is the first xdist-stream path; without it the stream aborts with
+     `TypeError: Object of type WorkerController is not JSON serializable`.
+- LOCAL VERIFICATION done: child stream-forward under `-p xdist --numprocesses=2`
+  writes clean JSONL (3 TestReports / call passed); host `replay_report_line`
+  round-trips it (3 dispatched); harness unit tests 52 passed/1 skipped incl. new
+  `test_multi_vo_pytest_cmd_forward_stream` + `test_run_multi_vo_only_tst_streams`;
+  forwarding 41 passed/1 skipped. Full end-to-end `--suite=multi_vo` host-driver
+  run (CI-faithful) launched locally for final green confirmation.
+
+### (b)/(d) verdict
+NOT root-caused individually — the CI triage (run 28468143419) already showed both
+PASS under Session A (xdist+noparallel) and fail only under the serial Session B;
+they are `@noparallel` tests whose isolation legacy provides via xdist. The wiring
+fix makes CI gate on the xdist children, so they are covered by faithfulness (the
+legacy-equivalent execution model), not by patching the product tests. If either
+survives under the faithful xdist gate in CI, that is the signal to bring an
+inherit decision to the user (do NOT patch test_bad_replica / test_bin_rucio).
+
+### Files changed (local commit, NOT pushed)
+- tests/ruciopytest/infra_manager.py  (server multi_vo cfg + rc capture + per-VO stream wiring)
+- tests/ruciopytest/plugin.py          (suppress outer multi_vo collection, mirror children rc)
+- tests/ruciopytest/forwarding.py      (xdist-safe emit: drop node, default=str)
+- tests/ruciopytest/forward_stream_plugin.py (NEW: controller-only stream emitter for the children)
+- tests/ruciopytest/__init__.py        (multi_vo_forward_rc_key stash key)
+- tests/ruciopytest/test_multi_vo_support.py (2 new unit tests)
