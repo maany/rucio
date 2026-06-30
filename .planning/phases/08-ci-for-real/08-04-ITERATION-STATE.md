@@ -221,6 +221,54 @@ Skimmed run_multi_vo / per-VO bootstrap + legacy run_multi_vo_tests_docker.sh:
   explicitly per VO in bootstrap_vo). Confirm a `super_root` account+identity
   exists in `def` so add_vo(issuer='super_root') succeeds.
 
+### Item 8 FIX applied (run 28456808306 had multi_vo as the lone red; 4/5 green)
+Verified the exact legacy chain in source before coding:
+- `lib/rucio/db/sqla/util.py::create_root_account()` branches on
+  `common.multi_vo`: when True it creates the **`super_root`** account (in
+  DEFAULT_VO `def`) with the `ddmlab`/`secret` USERPASS identity; when False it
+  creates **`root`**.
+- `lib/rucio/core/vo.py::add_vo()` creates each per-VO `root` and then
+  `for ident in list_identities(InternalAccount('super_root', vo=def)): add_account_identity(... root@<vo> ...)`
+  — i.e. per-VO root inherits ddmlab ONLY IF super_root exists with it.
+- ROOT CAUSE: our base `setup()` ran under the DEFAULT cfg (multi_vo=False), so
+  create_root_account created `root`, never `super_root`. add_vo's gateway
+  permission passes on the *string* `super_root` even when the account row is
+  absent, so `add_vo` "succeeded" but `list_identities(super_root)` was empty →
+  root@testvo1/testvo2 got only `root@<vo>/password`, never ddmlab/secret →
+  client (ddmlab/secret) `CannotAuthenticate`. SECONDARY bug: the parent-process
+  per-VO bootstrap never reloaded the config singleton after re-pointing
+  RUCIO_HOME, so `_bootstrap_test_data` kept stale `vo`/`multi_vo` and the second
+  VO's `add_vo` effectively never ran for ts2.
+
+FIX (infra-only, `tests/ruciopytest/infra_manager.py`):
+1. `setup()` multi_vo branch now generates the per-VO cfgs and calls new
+   `_activate_multi_vo_base_config()` (sets `RUCIO_HOME=/opt/rucio/etc/multi_vo/tst`
+   + `clean_cached_config()`) BEFORE purge/build/create — so the whole base
+   bring-up runs under multi_vo=True and `create_root_account()` provisions
+   `super_root` + ddmlab. Mirrors run_multi_vo_tests_docker.sh exporting
+   RUCIO_HOME=tst before reset_database.py. The later `_setup_multi_vo()` call is
+   now guarded to non-multi_vo (already generated above).
+2. `bootstrap_vo()` now `clean_cached_config()` after re-pointing RUCIO_HOME, so
+   `_bootstrap_test_data` reads THIS VO's `[client] vo` (testvo1 vs testvo2) and
+   `multi_vo=True`, ensuring `add_vo(testvo2)` actually runs for ts2 and copies
+   ddmlab onto root@ts2.
+All per-VO cfgs share the same `[database]` (postgres14/rucio, schema=dev) so the
+cached DB session/engine is unaffected — only the config singleton is dropped.
+
+Why this fixes the ~90 CannotAuthenticate: super_root now exists in `def` with
+ddmlab; add_vo copies ddmlab onto each per-VO root; client authenticates
+ddmlab/secret → root@<vo>. Scope: provisioning/bootstrap-parity only; no product
+test touched.
+
+Residual multi_vo failures expected to remain (NOT auth, OUT OF SCOPE / inherit):
+- a few `test_bb8` ScopeNotFound and the shared reaper FK class if any survive —
+  these fail the SAME way under legacy bring-up (no extra scope provisioning in
+  legacy multi_vo path) → inherit, do NOT patch product tests. Re-assess against
+  the live artifact if multi_vo is still red.
+
+Local sanity: infra_manager ast-parse + import OK; clean_cached_config import OK;
+test_multi_vo_support.py 6 passed (incl. setup-order guard).
+
 ## Watch protocol
 - After pushing, hand orchestrator the new sha + run id. Orchestrator watches and returns per-leg results + artifacts.
 - Useful: gh run view <id> --repo maany/rucio --json jobs --jq '.jobs[]|"\(.databaseId) \(.name) \(.conclusion)"'

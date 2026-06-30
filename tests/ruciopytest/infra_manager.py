@@ -79,14 +79,31 @@ class InfraManager:
         self._cleanup_temp_files()
 
         # Critical steps (raise RuntimeError on failure)
+
+        # multi_vo: mirror run_multi_vo_tests_docker.sh, which exports
+        # RUCIO_HOME=/opt/rucio/etc/multi_vo/tst BEFORE running
+        # reset_database.py. That makes create_root_account() execute under
+        # multi_vo=True, so it provisions the `super_root` account (in the base
+        # VO `def`) carrying the `ddmlab`/`secret` USERPASS identity. add_vo()
+        # later copies super_root's identities onto each per-VO root -- which is
+        # exactly what lets the client authenticate as root@<vo> with
+        # ddmlab/secret. Generate the per-VO cfgs first (so the tst cfg exists),
+        # then point RUCIO_HOME at it and drop the cached config singleton so
+        # the whole base bring-up runs under the multi_vo config.
+        if self._profile.name == "multi_vo":
+            self._setup_multi_vo()
+            self._activate_multi_vo_base_config()
+
         self._purge_database()
         self._build_database()
         self._create_base_vo_and_root_account()
         self._fix_sqlite_permissions()
         self._apply_votest_policy()
         # Generate both VO configs BEFORE httpd restart so the restart picks
-        # them up. No-op for non-multi_vo suites.
-        self._setup_multi_vo()
+        # them up. No-op for non-multi_vo suites; for multi_vo this already ran
+        # above (idempotent regeneration is skipped here to avoid re-pointing).
+        if self._profile.name != "multi_vo":
+            self._setup_multi_vo()
         self._restart_httpd()
         self._bootstrap_test_data()
         self._sync_rses()
@@ -135,6 +152,35 @@ class InfraManager:
             ) from e
         print("[infra_manager] Generated multi_vo configs (tst, ts2)")
 
+    def _activate_multi_vo_base_config(self) -> None:
+        """Point ``RUCIO_HOME`` at the tst (multi_vo) cfg for the base bring-up.
+
+        Mirrors ``run_multi_vo_tests_docker.sh`` exporting
+        ``RUCIO_HOME=/opt/rucio/etc/multi_vo/tst`` before ``reset_database.py``.
+        With that cfg active, ``common.multi_vo=True``, so
+        :func:`create_root_account` provisions the ``super_root`` account in the
+        base VO ``def`` (instead of ``root``) together with the ``ddmlab``/
+        ``secret`` USERPASS identity. :func:`add_vo` later copies super_root's
+        identities onto each per-VO root, which is what lets the client
+        authenticate as ``root@<vo>`` with ``ddmlab``/``secret``.
+
+        The tst cfg shares the default ``[database]`` target
+        (``postgresql+psycopg://rucio:rucio@postgres14/rucio``, ``schema=dev``),
+        so the cached DB session/engine keep operating on the same schema; only
+        the config singleton needs dropping so ``multi_vo`` is re-read as True.
+        """
+        tst_home = "/opt/rucio/etc/multi_vo/tst"
+        os.environ["RUCIO_HOME"] = tst_home
+        try:
+            from rucio.common.config import clean_cached_config
+            clean_cached_config()
+        except Exception as e:  # pragma: no cover - defensive
+            print(f"[infra_manager] Warning: could not clear cached config: {e}")
+        print(
+            f"[infra_manager] multi_vo: RUCIO_HOME -> {tst_home} "
+            "(multi_vo=True active for base bring-up)"
+        )
+
     def bootstrap_vo(self, vo_home: str) -> None:
         """Re-point ``RUCIO_HOME`` and bootstrap a single VO (no DB reset).
 
@@ -142,8 +188,22 @@ class InfraManager:
         ``_purge_database``/``_build_database`` -- so the second VO (ts2)
         reuses the schema created for tst, mirroring
         ``run_multi_vo_tests_docker.sh`` (no 2nd DB reset).
+
+        Drops the cached config singleton after re-pointing ``RUCIO_HOME`` so
+        ``_bootstrap_test_data`` reads THIS VO's ``[client] vo`` (testvo1 vs
+        testvo2) and ``[common] multi_vo=True``. Without the reload the parent
+        process keeps the previous VO's cached config and ``add_vo`` for the
+        second VO never runs -- so root@ts2 never inherits super_root's
+        ``ddmlab`` identity. All per-VO cfgs share the same ``[database]``
+        target (postgres14/rucio, schema=dev), so the cached DB session is
+        unaffected.
         """
         os.environ["RUCIO_HOME"] = vo_home
+        try:
+            from rucio.common.config import clean_cached_config
+            clean_cached_config()
+        except Exception as e:  # pragma: no cover - defensive
+            print(f"[infra_manager] Warning: could not clear cached config: {e}")
         print(f"[infra_manager] Bootstrapping VO at RUCIO_HOME={vo_home}")
         self._create_base_vo_and_root_account()
         self._bootstrap_test_data()
