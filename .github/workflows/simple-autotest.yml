@@ -168,6 +168,31 @@ jobs:
             -v --tb=short \
             tests/ 2>&1 | tee test-results/${{ matrix.suite }}-py${{ matrix.python }}.pytest.log
 
+      # ----------------------------------------------------------------
+      # Legacy-faithful in-container fallback for the client leg.
+      # Fires only when host-side provisioning left the server unreachable
+      # or host collection failed to import (reachable != 'true'). Reproduces
+      # exactly what tools/test/test.sh SUITE=client did: cp rucio_client.cfg
+      # then pytest the 3 client files INSIDE the rucio container. Writes junit
+      # to the same test-results/ path so the report step still renders.
+      # ----------------------------------------------------------------
+      - name: Run client tests in-container (fallback)
+        if: matrix.suite == 'client' && steps.client_provision.outputs.reachable != 'true'
+        env:
+          RUCIO_TEST_IMAGE: ${{ matrix.python == '3.10' && needs.runtime_images.outputs.py310_image || needs.runtime_images.outputs.py39_image }}
+          RDBMS: ${{ matrix.rdbms }}
+          PYTHON: ${{ matrix.python }}
+        run: |
+          set -o pipefail
+          mkdir -p test-results
+          COMPOSE="docker compose -p rucio-client-ci -f etc/docker/dev/docker-compose.yml -f etc/docker/dev/docker-compose.test.override.yml -f etc/docker/dev/docker-compose.ports.yml --profile postgres14"
+          # Ensure the stack is up + bootstrapped (it may not be if host provisioning aborted early).
+          $COMPOSE up -d --wait rucio
+          $COMPOSE exec -T rucio tools/run_tests.sh -i
+          # Legacy client path, run inside the rucio container; junit lands on the host
+          # via the /rucio_source bind mount (= repo root) under test-results/.
+          $COMPOSE exec -T rucio bash -lc "cp etc/docker/test/extra/rucio_client.cfg /opt/rucio/etc/rucio.cfg && tools/pytest.sh -v --tb=short tests/test_clients.py tests/test_bin_rucio.py tests/test_module_import.py --junitxml=/rucio_source/test-results/client-py${{ matrix.python }}.xml" 2>&1 | tee test-results/client-py${{ matrix.python }}.pytest.log
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
