@@ -224,4 +224,49 @@ def generate_multi_vo_configs(
     except OSError as e:
         raise RuntimeError(f"failed to write multi_vo configs: {e}") from e
 
+    # Carry over the base cfg's [alembic] section into both generated cfgs.
+    #
+    # The per-VO source cfgs (rucio_multi_vo_{tst,ts2}_postgres14.cfg) override
+    # [alembic] cfg to a per-VO path (e.g. /opt/rucio/etc/multi_vo/tst/etc/
+    # alembic.ini). Under the legacy multi_vo docker image those per-VO
+    # alembic.ini files exist; the simple-autotest runtime image does NOT create
+    # them. Because InfraManager._build_database() runs
+    # ``Config(config_get('alembic','cfg')); command.stamp(cfg,'head')``, a cfg
+    # pointing at a non-existent alembic.ini yields an alembic Config with no
+    # ``script_location`` -> ``CommandError: No 'script_location' key`` -> the
+    # whole multi_vo bring-up aborts before any test runs. The base cfg
+    # (rucio_autotests_common.cfg) points [alembic] cfg at /opt/rucio/etc/
+    # alembic.ini, which DOES exist in the container (remote_dbs builds fine via
+    # it). Forcing the base [alembic] back over the per-VO override keeps a valid
+    # script_location while the per-VO DB/VO settings (last-source-wins) stay.
+    _carry_over_section(base, tst_cfg, "alembic")
+    _carry_over_section(base, ts2_cfg, "alembic")
+
     return {"tst": tst_cfg, "ts2": ts2_cfg}
+
+
+def _carry_over_section(base_cfg_path, dest_cfg_path, section):
+    """Force *section* from *base_cfg_path* into the already-written
+    *dest_cfg_path*, overriding whatever the per-VO merge produced.
+
+    No-op when the base cfg lacks the section. Used to restore the base
+    ``[alembic]`` (valid ``cfg`` -> existing alembic.ini) after the per-VO
+    source overrode it with a path the runtime image never creates.
+    """
+    base = configparser.ConfigParser()
+    base.read(str(base_cfg_path))
+    if not base.has_section(section):
+        return
+
+    dest = configparser.ConfigParser()
+    dest.read(dest_cfg_path)
+    if not dest.has_section(section):
+        dest.add_section(section)
+    # Replace the section wholesale with the base values.
+    for option in dest.options(section):
+        dest.remove_option(section, option)
+    for option, value in base.items(section):
+        dest.set(section, option, value)
+
+    with open(dest_cfg_path, "w") as f:
+        dest.write(f)

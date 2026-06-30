@@ -269,6 +269,36 @@ Residual multi_vo failures expected to remain (NOT auth, OUT OF SCOPE / inherit)
 Local sanity: infra_manager ast-parse + import OK; clean_cached_config import OK;
 test_multi_vo_support.py 6 passed (incl. setup-order guard).
 
+### Item 8 FOLLOW-UP (run 28460113280, sha 9662bdeb2): auth FIXED, new build regression
+Coordinator artifact (multi_vo job 84345461928): ZERO CannotAuthenticate (the
+super_root/ddmlab fix worked). But the base bring-up now runs under the tst cfg,
+and `_build_database()` did:
+  `alembic_cfg = Config(config_get('alembic','cfg')); command.stamp(alembic_cfg,'head')`
+-> `CommandError: No 'script_location' key found in configuration` -> "Failed to
+build database" -> no tests ran, container pytest exit 3.
+
+ROOT CAUSE: the per-VO source cfgs (etc/docker/test/extra/rucio_multi_vo_*_
+postgres14.cfg) override `[alembic] cfg = /opt/rucio/etc/multi_vo/<vo>/etc/
+alembic.ini`. Legacy's multi_vo docker image creates those per-VO alembic.ini
+files; the simple-autotest runtime image does NOT. So config_get('alembic','cfg')
+returned a path to a non-existent ini -> alembic Config with no script_location.
+The base cfg (rucio_autotests_common.cfg) points [alembic] cfg at
+/opt/rucio/etc/alembic.ini, which DOES exist (remote_dbs builds fine via it).
+
+FIX (infra/bootstrap-parity, `tests/ruciopytest/multi_vo_support.py`):
+generate_multi_vo_configs() now post-processes each generated cfg via new
+`_carry_over_section(base, dest, "alembic")`, forcing the base cfg's [alembic]
+section (cfg=/opt/rucio/etc/alembic.ini) back over the per-VO override while the
+last-source-wins per-VO DB/VO settings (vo=testvo1/2, multi_vo=True) are kept.
+Verified locally: generated tst/ts2 cfgs now have
+`[alembic] cfg=/opt/rucio/etc/alembic.ini`, vo=testvo1/testvo2, multi_vo=True.
+Did NOT edit the source extra/ cfgs (shared with legacy, which needs the per-VO
+path). test_multi_vo_support.py 6 passed.
+
+Expected next: _build_database() succeeds under tst cfg -> per-VO bootstrap runs
+(validates super_root/ddmlab) -> multi_vo tests execute. Residual if any: a few
+test_bb8 ScopeNotFound = OUT OF SCOPE / inherit legacy; do NOT patch product tests.
+
 ## Watch protocol
 - After pushing, hand orchestrator the new sha + run id. Orchestrator watches and returns per-leg results + artifacts.
 - Useful: gh run view <id> --repo maany/rucio --json jobs --jq '.jobs[]|"\(.databaseId) \(.name) \(.conclusion)"'
