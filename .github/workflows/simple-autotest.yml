@@ -98,12 +98,20 @@ jobs:
       # ----------------------------------------------------------------
       - name: Install full rucio on host (client)
         if: matrix.suite == 'client'
+        continue-on-error: true
         run: |
-          # Legacy-equivalent minimal set: editable rucio + server + client + dev reqs.
+          # Match the runtime container's env: editable rucio + server + dev reqs.
+          # requirements.client.txt is intentionally NOT installed here: it pins
+          # urllib3>=2.5.0 which is irreconcilable with the server/dev pin
+          # urllib3==1.26.19,<2 (botocore constraint), so server+client+dev cannot
+          # co-resolve in one venv. Legacy runs client tests INSIDE the server
+          # container (urllib3 1.26.19); the client libs ship in `pip install -e .`
+          # and their runtime deps are a subset of the server env, so this is the
+          # legacy-faithful host environment. continue-on-error lets any residual
+          # host-install fragility degrade to the in-container fallback below.
           # Reuses the setup-python (and its pip cache) from above; no second setup-python.
           python -m pip install -e . \
             -r requirements/requirements.server.txt \
-            -r requirements/requirements.client.txt \
             -r requirements/requirements.dev.txt
           # test_bin_rucio shells out to the `rucio` CLI; put bin/ on PATH (no console_scripts).
           echo "$GITHUB_WORKSPACE/bin" >> "$GITHUB_PATH"
