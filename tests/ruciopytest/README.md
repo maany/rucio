@@ -167,3 +167,197 @@ python -m pytest --suite=remote_dbs --container-env=RUCIO_LOG_LEVEL=DEBUG tests/
 # --policy: required to select the votest policy package.
 python -m pytest --suite=votest --policy=atlas tests/
 ```
+
+## Examples
+
+One standalone example per mode — jump to the one you need. Output is shown only
+for `--co` and `--dry-run` (where it clarifies behavior); ordinary run commands
+omit output to avoid staleness.
+
+### Host-side run
+
+Runs on your machine against an already-running server. Fastest feedback, no
+container startup:
+
+```bash
+python -m pytest --suite=client tests/
+```
+
+### Forwarded run
+
+Executes inside the Rucio container (the plugin starts it for you). Use this for
+the full server-side suite:
+
+```bash
+python -m pytest --suite=remote_dbs tests/
+```
+
+Force a forwarded suite onto the host instead (debugging only — the host lacks
+the container's services, so results may be unreliable and you'll see a
+warning):
+
+```bash
+python -m pytest --suite=remote_dbs --no-run-in-container tests/
+```
+
+### Reuse the database with `--keep-db`
+
+Skip the purge/rebuild/seed cycle and reuse the previous run's database — great
+for fast iteration. Tradeoff: leftover state from the prior run can make tests
+pass or fail spuriously, so drop `--keep-db` when in doubt:
+
+```bash
+python -m pytest --suite=remote_dbs --keep-db tests/
+```
+
+### Override infrastructure with `--infra`
+
+`--infra` takes comma-separated compose profiles or service names. Use it alone
+(the plugin infers the suites that match the infra) or with `--suite` (the
+suite's tests, but the infrastructure you name):
+
+```bash
+# Bring up the postgres14 profile and run whatever suites match it.
+python -m pytest --infra=postgres14 tests/
+
+# Keep the remote_dbs test set, override the infrastructure.
+python -m pytest --suite=remote_dbs --infra=postgres14 tests/
+```
+
+### Inject env into the container with `--container-env`
+
+Only `RUCIO_`-prefixed host env crosses into the forwarded container; use
+`--container-env` (repeatable) to push any other variable in for the run:
+
+```bash
+python -m pytest --suite=remote_dbs \
+  --container-env=RUCIO_LOG_LEVEL=DEBUG \
+  --container-env=MY_FLAG=1 tests/
+```
+
+### Select a policy with `--policy`
+
+`votest` requires a policy package; `--policy` wins over the `POLICY` env var:
+
+```bash
+python -m pytest --suite=votest --policy=atlas tests/
+```
+
+### Preview collection with `--co`
+
+Standard pytest collect-only — list what *would* run without executing. For a
+forwarded suite the listing comes from inside the container (the authoritative
+source). Illustrative output:
+
+```bash
+$ python -m pytest --suite=votest --policy=atlas --co tests/
+# ...
+<Module tests/test_policy_atlas.py>
+  <Function test_atlas_permission_add_rule>
+  <Function test_atlas_scope_naming>
+# ... (illustrative — actual list depends on the selected policy)
+```
+
+### Preview the full plan with `--dry-run`
+
+`--dry-run` prints the infrastructure plan *and* the test collection without
+running anything. Add `--dry-run-json` for a machine-readable report.
+Illustrative output:
+
+```bash
+$ python -m pytest --suite=multi_vo --dry-run tests/
+============ Rucio Test Suite Configuration ============
+  Suite:          multi_vo
+  RDBMS:          postgres14
+  xdist enabled:  True
+  ...
+# infra plan + collected tests listed, nothing executed
+# (illustrative — exact fields depend on the resolved profile)
+```
+
+## CI mapping
+
+The `.github/workflows/simple-autotest.yml` `test` job runs one leg per matrix
+entry. Each leg is just a `python -m pytest --suite=<suite> ... tests/`
+invocation with a handful of env vars — so any failing leg reproduces locally
+with the equivalent command below.
+
+| CI leg | Env the workflow sets | Equivalent local command |
+| ------ | --------------------- | ------------------------ |
+| `remote_dbs` (py3.9) | `RDBMS=postgres14 PYTHON=3.9` | `python -m pytest --suite=remote_dbs tests/` |
+| `remote_dbs` (py3.10) | `RDBMS=postgres14 PYTHON=3.10` | `python -m pytest --suite=remote_dbs tests/` (py3.10 image) |
+| `multi_vo-tst` | `RDBMS=postgres14 PYTHON=3.9 RUCIO_MULTI_VO_LEG=tst` | `RUCIO_MULTI_VO_LEG=tst python -m pytest --suite=multi_vo tests/` |
+| `multi_vo-ts2` | `RDBMS=postgres14 PYTHON=3.9 RUCIO_MULTI_VO_LEG=ts2` | `RUCIO_MULTI_VO_LEG=ts2 python -m pytest --suite=multi_vo tests/` |
+| `client` | `RDBMS=postgres14 PYTHON=3.9` | `python -m pytest --suite=client tests/` |
+| `votest` | `RDBMS=postgres14 PYTHON=3.9 POLICY=atlas` | `python -m pytest --suite=votest --policy=atlas tests/` |
+
+Notes for reproducing a leg:
+
+- **`multi_vo` is split into two parallel VO legs** (`multi_vo-tst` and
+  `multi_vo-ts2`), each its own runner job with its own compose stack. They share
+  `suite=multi_vo` + py3.9 + postgres14, so the `leg` label disambiguates them
+  and `RUCIO_MULTI_VO_LEG` (auto-forwarded because of the `RUCIO_` prefix)
+  selects the single VO each job runs. See `simple-autotest.yml` around the
+  `matrix.include` block.
+- **Forwarded suites get xdist workers injected** inside the container (3 on CI
+  via `GITHUB_ACTIONS=true`), so `remote_dbs` and `votest` run in parallel.
+- The full CI invocation adds reporting flags —
+  `--junitxml=test-results/<leg>-py<py>.xml -r fExX --log-level=DEBUG -v
+  --tb=short` — which you can append locally but aren't needed to reproduce a
+  failure.
+- The `client` leg runs **host-side** on the runner, with an automatic
+  in-container fallback if the provisioned server is unreachable.
+
+## Migrating from test.sh
+
+The plugin is a drop-in for `tools/test/test.sh`. If you know the legacy
+`SUITE=...` invocations, here's the mapping (grounded in `tools/test/test.sh`):
+
+- `SUITE=client` → `python -m pytest --suite=client tests/`
+- `SUITE=votest` → `python -m pytest --suite=votest --policy=<pkg> tests/`
+- `SUITE=multi_vo` → `python -m pytest --suite=multi_vo tests/` (runs both VOs; a
+  single leg via `RUCIO_MULTI_VO_LEG=tst|ts2`)
+- `SUITE=remote_dbs` → `python -m pytest --suite=remote_dbs tests/`
+
+The legacy `SUITE=sqlite` has **no** plugin equivalent — SQLite was descoped from
+the plugin (only `postgres14` remains). It still exists in `test.sh` if you need
+it.
+
+## Troubleshooting
+
+### Stale results after `--keep-db`
+
+- **Symptom:** tests pass/fail inconsistently, or data from a previous run
+  lingers.
+- **Cause:** `--keep-db` skipped the purge/rebuild/seed cycle, so leftover DB
+  state carried over.
+- **Fix:** re-run **without** `--keep-db` to get a clean database.
+
+### Container env var not taking effect
+
+- **Symptom:** an env var you set on the host isn't visible inside the forwarded
+  run.
+- **Cause:** only `RUCIO_`-prefixed vars (plus `SUITE`/`POLICY`/`RDBMS`/
+  `GITHUB_ACTIONS`) cross into the container.
+- **Fix:** prefix it with `RUCIO_`, or pass it explicitly with
+  `--container-env=KEY=VALUE`.
+
+### Wrong VO / multi-VO config issues
+
+- **Symptom:** a `multi_vo` run exercises the wrong VO, or you want just one.
+- **Cause:** `RUCIO_MULTI_VO_LEG` is unset (defaults to `tst`) or set to an
+  unrecognized value (also defaults to `tst`).
+- **Fix:** set `RUCIO_MULTI_VO_LEG=tst` or `=ts2` to select the leg; leave it
+  unset to run both.
+
+### Container won't start
+
+- **Symptom:** the run aborts before tests, or a bind-mount / compose error
+  appears.
+- **Cause:** Docker isn't running, the dev runtime image isn't built, or the
+  needed compose profile isn't available. Forwarding also requires the repo
+  bind-mounted at `/rucio_source`.
+- **Fix:** ensure Docker is up, build/pull the dev runtime image, and use the
+  [dockerized dev environment](../../etc/docker/dev) so the `/rucio_source`
+  mount and compose profiles exist. A stale-image warning during forwarding
+  hints you should rebuild.
