@@ -181,16 +181,20 @@ jobs:
           RDBMS: ${{ matrix.rdbms }}
           PYTHON: ${{ matrix.python }}
           POLICY: ${{ matrix.policy }}
+          # Selects the single VO the Plan-01 harness runs for a multi_vo leg (tst | ts2).
+          # Empty for the 4 non-multi_vo legs (harness ignores it). The RUCIO_ prefix is
+          # auto-forwarded into the container by forwarding.py, so it reaches run_multi_vo().
+          RUCIO_MULTI_VO_LEG: ${{ matrix.vo }}
         run: |
           set -o pipefail
           mkdir -p test-results
           python -m pytest \
             --suite=${{ matrix.suite }} \
-            --junitxml=test-results/${{ matrix.suite }}-py${{ matrix.python }}.xml \
+            --junitxml=test-results/${{ matrix.leg }}-py${{ matrix.python }}.xml \
             -r fExX \
             --log-level=DEBUG \
             -v --tb=short \
-            tests/ 2>&1 | tee test-results/${{ matrix.suite }}-py${{ matrix.python }}.pytest.log
+            tests/ 2>&1 | tee test-results/${{ matrix.leg }}-py${{ matrix.python }}.pytest.log
 
       # ----------------------------------------------------------------
       # Legacy-faithful in-container fallback for the client leg.
@@ -235,7 +239,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-results-${{ matrix.suite }}-py${{ matrix.python }}
+          name: test-results-${{ matrix.leg }}-py${{ matrix.python }}
           path: test-results/
           if-no-files-found: ignore
 
@@ -243,7 +247,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: container-logs-${{ matrix.suite }}-py${{ matrix.python }}
+          name: container-logs-${{ matrix.leg }}-py${{ matrix.python }}
           path: .test-logs/
           retention-days: 7
           if-no-files-found: ignore
@@ -252,14 +256,14 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: host-logs-${{ matrix.suite }}-py${{ matrix.python }}
+          name: host-logs-${{ matrix.leg }}-py${{ matrix.python }}
           # .test-forward/ is a dot dir holding the forwarded container's pytest
           # stdout + JSONL report stream; include-hidden-files is required or the
           # in-container traceback for a red leg is silently dropped.
           include-hidden-files: true
           path: |
             .test-forward/
-            test-results/${{ matrix.suite }}-py${{ matrix.python }}.pytest.log
+            test-results/${{ matrix.leg }}-py${{ matrix.python }}.pytest.log
           retention-days: 7
           if-no-files-found: ignore
 
@@ -268,5 +272,5 @@ jobs:
         uses: mikepenz/action-junit-report@v6
         with:
           report_paths: test-results/*.xml
-          check_name: Tests - ${{ matrix.suite }} (py${{ matrix.python }})
+          check_name: Tests - ${{ matrix.leg }} (py${{ matrix.python }})
           fail_on_failure: true
