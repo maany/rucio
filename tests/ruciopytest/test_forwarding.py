@@ -36,12 +36,14 @@ from tests.ruciopytest.forwarding import (
     REPORT_STREAM_ENV,
     ReportStreamEmitter,
     build_env_flags,
+    build_forward_xdist_args,
     build_inner_pytest_args,
     finalize_host_exit,
     make_emitter_from_env,
     mirror_exit_code,
     replay_report_line,
 )
+from tests.ruciopytest.profiles import resolve_profile
 
 pytest_plugins = ["pytester"]
 
@@ -702,3 +704,56 @@ def test_collect_only_mode_inherits_container_stdout(monkeypatch, tmp_path):
     # --co inherits the container's stdout (its listing is the only render).
     assert popen_kwargs.get("stdout") is None
     assert not (tmp_path / forwarding._FORWARD_SCRATCH_DIRNAME / "proj.container-stdout.log").exists()
+
+
+# ---------------------------------------------------------------------------
+# build_forward_xdist_args -- forwarded container xdist injection (08.1-A)
+# ---------------------------------------------------------------------------
+
+def test_forward_xdist_ci_uses_default_workers_ci():
+    """On GitHub Actions, remote_dbs resolves N to the profile default_workers_ci (3)."""
+    profile = resolve_profile("remote_dbs", "postgres14")
+    assert build_forward_xdist_args(profile, {"GITHUB_ACTIONS": "true"}) == [
+        "-p", "xdist", "--numprocesses=3",
+    ]
+
+
+def test_forward_xdist_local_uses_auto():
+    """Locally (GITHUB_ACTIONS unset), N resolves to default_workers_local ('auto')."""
+    profile = resolve_profile("remote_dbs", "postgres14")
+    assert build_forward_xdist_args(profile, {}) == [
+        "-p", "xdist", "--numprocesses=auto",
+    ]
+
+
+def test_forward_xdist_explicit_override_wins():
+    """A host --xdist-workers=K override beats the CI default."""
+    profile = resolve_profile("remote_dbs", "postgres14")
+    assert build_forward_xdist_args(
+        profile, {"GITHUB_ACTIONS": "true"}, explicit_workers=6
+    ) == ["-p", "xdist", "--numprocesses=6"]
+
+
+def test_forward_xdist_votest_enabled():
+    """votest is xdist_enabled too -- CI injects numprocesses=3."""
+    profile = resolve_profile("votest", "postgres14")
+    assert build_forward_xdist_args(profile, {"GITHUB_ACTIONS": "true"}) == [
+        "-p", "xdist", "--numprocesses=3",
+    ]
+
+
+def test_forward_xdist_multi_vo_excluded():
+    """multi_vo injects nothing on the outer run -- its per-VO children own xdist."""
+    profile = resolve_profile("multi_vo", "postgres14")
+    assert build_forward_xdist_args(profile, {"GITHUB_ACTIONS": "true"}) == []
+
+
+def test_forward_xdist_disabled_backend_noop():
+    """A non-postgres14 backend (xdist_enabled False) injects nothing."""
+    profile = resolve_profile("remote_dbs", "sqlite")
+    assert build_forward_xdist_args(profile, {"GITHUB_ACTIONS": "true"}) == []
+
+
+def test_forward_xdist_none_profile_noop():
+    """A None profile injects nothing (defensive)."""
+    assert build_forward_xdist_args(None, {"GITHUB_ACTIONS": "true"}) == []

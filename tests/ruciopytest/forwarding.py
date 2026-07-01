@@ -511,12 +511,13 @@ def run_forwarded_session(
     # here for xdist_enabled suites -- mirroring _multi_vo_pytest_cmd. Skip for
     # interactive runs (pdb+xdist are incompatible) and when inner_args already carry
     # a worker flag (idempotent -- never double-inject).
-    if not interactive and not any(
+    config = getattr(session, "config", None)
+    if config is not None and not interactive and not any(
         a in ("-n", "-p") or a.startswith("--numprocesses") or a == "xdist"
         for a in inner_args
     ):
-        profile = session.config.stash.get(suite_profile_key, None)
-        explicit = session.config.getoption("xdist_workers", default=None)
+        profile = config.stash.get(suite_profile_key, None)
+        explicit = config.getoption("xdist_workers", default=None)
         inner_args = inner_args + build_forward_xdist_args(profile, os.environ, explicit)
 
     env_flags = build_env_flags(os.environ, container_env)
