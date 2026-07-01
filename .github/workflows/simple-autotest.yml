@@ -25,18 +25,33 @@ jobs:
       matrix:
         include:
           - suite: remote_dbs
+            leg: remote_dbs
             python: "3.9"
             rdbms: postgres14
           - suite: remote_dbs
+            leg: remote_dbs
             python: "3.10"
             rdbms: postgres14
+          # multi_vo is split into two parallel runner jobs (own compose stack each).
+          # Both are suite=multi_vo + py3.9 + postgres14, so they WOULD collide on every
+          # name; the `leg` label (multi_vo-tst / multi_vo-ts2) disambiguates them, and
+          # `vo` selects the single VO the Plan-01 harness runs via RUCIO_MULTI_VO_LEG.
           - suite: multi_vo
+            leg: multi_vo-tst
+            vo: tst
+            python: "3.9"
+            rdbms: postgres14
+          - suite: multi_vo
+            leg: multi_vo-ts2
+            vo: ts2
             python: "3.9"
             rdbms: postgres14
           - suite: client
+            leg: client
             python: "3.9"
             rdbms: postgres14
           - suite: votest
+            leg: votest
             python: "3.9"
             rdbms: postgres14
             policy: atlas
