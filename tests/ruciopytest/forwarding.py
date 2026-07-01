@@ -51,14 +51,21 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Iterable, List, Mapping, Optional
 
+# Safe import: __init__ imports only .profiles (no plugin.py), so this does not
+# create a circular import into the plugin module.
+from . import suite_profile_key
+
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from _pytest.config import Config
     from _pytest.main import Session
+
+    from .profiles import SuiteProfile
 
 __all__ = [
     "REPORT_STREAM_ENV",
     "ReportStreamEmitter",
     "build_env_flags",
+    "build_forward_xdist_args",
     "build_inner_pytest_args",
     "finalize_host_exit",
     "make_emitter_from_env",
@@ -132,6 +139,39 @@ def build_inner_pytest_args(argv: List[str]) -> List[str]:
         result.append(token)
         i += 1
     return result
+
+
+def build_forward_xdist_args(
+    profile: "Optional[SuiteProfile]",
+    environ: Mapping[str, str],
+    explicit_workers: Optional[int] = None,
+) -> List[str]:
+    """Return ``['-p','xdist','--numprocesses=<N>']`` for an xdist_enabled forwarded suite, else ``[]``.
+
+    Mirrors ``InfraManager._multi_vo_pytest_cmd`` so the forwarded container suites
+    (remote_dbs, votest) run in parallel INSIDE the container. Precedence for ``<N>``:
+
+      1. ``explicit_workers`` (the host ``--xdist-workers=K`` override) when ``> 0``
+      2. ``profile.default_workers_ci`` when ``GITHUB_ACTIONS == 'true'``  (3 on CI)
+      3. ``profile.default_workers_local`` otherwise                      ('auto' locally)
+
+    Returns ``[]`` when the profile is ``None``, xdist is disabled, OR the suite is
+    multi_vo (multi_vo's per-VO children already inject xdist; the outer forwarded
+    run clears ``config.args`` and must not be parallelized).
+    """
+    if profile is None or not getattr(profile, "xdist_enabled", False):
+        return []
+    if getattr(profile, "name", None) == "multi_vo":
+        return []  # children own xdist
+
+    if explicit_workers is not None and explicit_workers > 0:
+        procs = str(explicit_workers)
+    elif environ.get("GITHUB_ACTIONS") == "true":
+        procs = str(profile.default_workers_ci)
+    else:
+        procs = str(profile.default_workers_local)
+
+    return ["-p", "xdist", f"--numprocesses={procs}"]
 
 
 # ---------------------------------------------------------------------------
@@ -465,6 +505,20 @@ def run_forwarded_session(
     _warn_if_stale(cm, root_dir)
 
     inner_args = build_inner_pytest_args(sys.argv[1:])
+
+    # Forwarded xdist parity (Phase 08.1-A): the host configure_xdist runs on the
+    # SUPPRESSED host session, so worker args never reach the container. Inject them
+    # here for xdist_enabled suites -- mirroring _multi_vo_pytest_cmd. Skip for
+    # interactive runs (pdb+xdist are incompatible) and when inner_args already carry
+    # a worker flag (idempotent -- never double-inject).
+    if not interactive and not any(
+        a in ("-n", "-p") or a.startswith("--numprocesses") or a == "xdist"
+        for a in inner_args
+    ):
+        profile = session.config.stash.get(suite_profile_key, None)
+        explicit = session.config.getoption("xdist_workers", default=None)
+        inner_args = inner_args + build_forward_xdist_args(profile, os.environ, explicit)
+
     env_flags = build_env_flags(os.environ, container_env)
 
     # --- interactive branch: raw TTY passthrough, no stream (FWD-08) ---------
