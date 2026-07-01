@@ -73,11 +73,11 @@ running serially (~41→~15, ~21→~8 min), and (B) split multi_vo's tst/ts2 int
 legs (~51→~25 min). Net target ~20-25 min. Every leg stays green with its own report.
 **Requirements**: CICD-08 (perf optimization of the CI legs; no new requirement IDs)
 **Depends on:** Phase 8
-**Plans:** 3/4 plans executed
-- [ ] 08.1-01-PLAN.md — multi_vo single-VO selector (RUCIO_MULTI_VO_LEG) + per-VO compose project name (wave 1)
-- [ ] 08.1-01b-PLAN.md — inject xdist into forwarded container runs (remote_dbs/votest) via forwarding.py + tests (wave 1)
-- [ ] 08.1-02-PLAN.md — workflow multi_vo matrix split (tst/ts2) + per-leg unique naming (wave 2)
-- [ ] 08.1-03-PLAN.md — live-CI verify BOTH levers: xdist speedup + multi_vo parallel legs green, ~20-25 min (wave 3, checkpoint)
+**Plans:** 4/4 plans executed (COMPLETE — live-CI verified on run 28503879697)
+- [x] 08.1-01-PLAN.md — multi_vo single-VO selector (RUCIO_MULTI_VO_LEG) + per-VO compose project name (wave 1)
+- [x] 08.1-01b-PLAN.md — inject xdist into forwarded container runs (remote_dbs/votest) via forwarding.py + tests (wave 1)
+- [x] 08.1-02-PLAN.md — workflow multi_vo matrix split (tst/ts2) + per-leg unique naming (wave 2)
+- [x] 08.1-03-PLAN.md — live-CI verify BOTH levers: GREEN run 28503879697 (sha 70cdaafa8), 7/7 jobs, multi_vo tst/ts2 parallel + forwarded xdist material (remote_dbs 41->28m, votest 21->15m), total wall 51.5m->30.8m (below legacy ~36m) (wave 3)
 
 ### Phase 9: Plugin docs
 **Goal**: A developer can learn to use the plugin from a README without reading the code.
