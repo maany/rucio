@@ -23,7 +23,7 @@ Requirements for the productionize-and-merge milestone. Delivery (history recons
 
 ### Documentation
 
-- [ ] **DOC-01**: `tests/ruciopytest/README.md` documents the suite table and all CLI options (`--suite`, `--run-in-container`/`--no-run-in-container`, `--container-env`, `--keep-db`, `--infra`, `--dry-run`/`--co`) with usage examples
+- [x] **DOC-01**: `tests/ruciopytest/README.md` documents the suite table and all CLI options (`--suite`, `--run-in-container`/`--no-run-in-container`, `--container-env`, `--keep-db`, `--infra`, `--dry-run`/`--co`) with usage examples
 
 ## Out of Scope
 
@@ -47,7 +47,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CICD-06 | Phase 8 | Complete |
 | CICD-07 | Phase 8 | Complete |
 | CICD-08 | Phase 8 | Complete |
-| DOC-01 | Phase 9 | Pending |
+| DOC-01 | Phase 9 | Complete |
 
 **Coverage:**
 - v1.1 requirements: 8 total

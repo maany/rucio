@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Productionize & Merge
-status: 08.1-03 shipped (LIVE-CI VERIFIED) -- PR run 28503879697 (sha 70cdaafa8) green on all 7 jobs; both multi_vo VO legs (tst, ts2) ran in parallel with distinct reports/artifacts, forwarded xdist cut remote_dbs/votest wall (41->28m / 21->15m), total workflow wall 51m31s->30m50s (below legacy ~36m). Phase 08.1 complete.
-stopped_at: Completed 08.1-03-PLAN.md
-last_updated: "2026-07-01T08:55:00.000Z"
+status: verifying
+stopped_at: Completed 09-01-PLAN.md
+last_updated: "2026-07-01T11:18:19.837Z"
 last_activity: 2026-07-01 -- 08.1-03 executed (live-CI verify green)
 progress:
   total_phases: 4
-  completed_phases: 2
-  total_plans: 11
-  completed_plans: 11
+  completed_phases: 4
+  total_plans: 12
+  completed_plans: 12
   percent: 100
 ---
 
@@ -26,10 +26,10 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 ## Current Position
 
 Milestone: v1.1 Productionize & Merge (in progress)
-Phase: 8 of 9 (CI for real) -- in progress
-Plan: 08.1-03 complete (live-CI verify GREEN) -- Phase 08.1 done; 08.1-02 / 08.1-01b / 08.1-01 prior
-Status: 08.1-03 shipped (LIVE-CI VERIFIED) -- PR run 28503879697 (sha 70cdaafa8) green on all 7 jobs; both multi_vo VO legs (tst, ts2) ran in parallel with distinct reports/artifacts, forwarded xdist cut remote_dbs/votest wall (41->28m / 21->15m), total workflow wall 51m31s->30m50s (below legacy ~36m)
-Last activity: 2026-07-01 -- 08.1-03 executed (live-CI verify green)
+Phase: 9 of 9 (Plugin docs) -- complete
+Plan: 09-01 complete (ruciopytest README, DOC-01 closed) -- Phase 08.1 done prior
+Status: 09-01 shipped -- tests/ruciopytest/README.md (363 lines): quickstart, how-it-works (host vs forwarded, DB lifecycle, multi-VO, forwarded xdist), 4-row suite table, 10-flag CLI reference, per-flag examples, post-8.1 CI leg->command mapping, test.sh migration, troubleshooting. Grounded in source; DOC-01 complete
+Last activity: 2026-07-01 -- 09-01 executed (plugin README)
 
 Progress: v1.0 [██████████] 100% | v1.1 [██░░░░░░░░] 17%
 
@@ -76,6 +76,7 @@ Progress: v1.0 [██████████] 100% | v1.1 [██░░░░�
 | Phase 08.1 P01 | 2min | 3 tasks | 4 files |
 | Phase 08.1 P02 | 2min | 2 tasks | 1 files |
 | Phase 08.1 P03 | 32min | 2 tasks | 2 files |
+| Phase 09 P01 | 2min | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -140,6 +141,7 @@ Recent decisions affecting current work:
 - [Phase 08.1]: 08.1-01: selector is env RUCIO_MULTI_VO_LEG (RUCIO_ prefix auto-forwards into container, no forwarding.py change); single-VO leg always streams (forward_stream=True); _activate_multi_vo_base_config defaults to tst when selector unset/unrecognized
 - [Phase 08.1]: 08.1-02: matrix.leg label decouples naming from suite (leg==suite for 4 baseline legs); multi_vo split into vo=tst/ts2 parallel legs selected via RUCIO_MULTI_VO_LEG env
 - [Phase 08.1]: 08.1-03: LIVE-CI VERIFIED both levers on PR run 28503879697 (sha 70cdaafa8) — 7/7 jobs green; multi_vo-tst/ts2 overlap (parallel) with distinct artifacts; forwarded xdist material (remote_dbs 41->28m, votest 21->15m); total wall 51m31s->30m50s (below legacy ~36m). xdist speedup more modest than the optimistic ~15m/~8m estimate but material+green (CPU-bound container at numprocesses=3). host-logs-* are on-failure-only, so xdist worker proof taken from local ts2 repro (created 3/3 workers gw0..gw2)
+- [Phase 09]: 09-01: ruciopytest README grounded in source (plugin.py/profiles.py/forwarding.py/simple-autotest.yml); quickstart uses client host-side suite; output shown only for --co/--dry-run
 
 ### Pending Todos
 
@@ -158,6 +160,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-01T08:55:00.000Z
-Stopped at: Completed 08.1-03-PLAN.md
+Last session: 2026-07-01T11:18:19.834Z
+Stopped at: Completed 09-01-PLAN.md
 Resume file: None

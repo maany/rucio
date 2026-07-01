@@ -29,7 +29,7 @@ to maany/rucio (delivery is a manual final step, not a phase).
 
 - [x] Phase 7: Suite-filtering parity — votest POLICY selection, multi_vo 2-VO config, parity guard (completed 2026-06-23)
 - [x] Phase 8: CI for real — host deps install, full rucio for host suites, artifacts/junit, all 5 legs green (completed 2026-07-01)
-- [ ] Phase 8.1: multi_vo parallel VO legs — split tst/ts2 into parallel matrix legs (INSERTED)
+- [x] Phase 8.1: multi_vo parallel VO legs — split tst/ts2 into parallel matrix legs (INSERTED)
 - [ ] Phase 9: Plugin docs — tests/ruciopytest/README.md
 
 ## Phase Details
@@ -73,7 +73,7 @@ running serially (~41→~15, ~21→~8 min), and (B) split multi_vo's tst/ts2 int
 legs (~51→~25 min). Net target ~20-25 min. Every leg stays green with its own report.
 **Requirements**: CICD-08 (perf optimization of the CI legs; no new requirement IDs)
 **Depends on:** Phase 8
-**Plans:** 4/4 plans executed (COMPLETE — live-CI verified on run 28503879697)
+**Plans:** 4/4 plans complete
 - [x] 08.1-01-PLAN.md — multi_vo single-VO selector (RUCIO_MULTI_VO_LEG) + per-VO compose project name (wave 1)
 - [x] 08.1-01b-PLAN.md — inject xdist into forwarded container runs (remote_dbs/votest) via forwarding.py + tests (wave 1)
 - [x] 08.1-02-PLAN.md — workflow multi_vo matrix split (tst/ts2) + per-leg unique naming (wave 2)
@@ -87,6 +87,9 @@ legs (~51→~25 min). Net target ~20-25 min. Every leg stays green with its own 
   1. `tests/ruciopytest/README.md` documents the suite table and every CLI option with runnable examples
   2. Examples cover host-side, forwarded, `--keep-db`, `--infra`, and `--dry-run`/`--co` usage
 
+**Plans:** 1 plan
+- [x] 09-01-PLAN.md — write tests/ruciopytest/README.md (Quickstart → How it works → Suite table → CLI reference → Examples → CI mapping → Troubleshooting), grounded in plugin.py/profiles.py/forwarding.py/multi_vo_support.py + post-8.1 simple-autotest.yml (DOC-01)
+
 ## Progress
 
 | Phase | Milestone | Plans | Status | Completed |
@@ -98,5 +101,6 @@ legs (~51→~25 min). Net target ~20-25 min. Every leg stays green with its own 
 | 5. CI Workflow | v1.0 | 2/2 | Complete | 2026-03-13 |
 | 6. Host Forwarding | v1.0 | 4/4 | Complete | 2026-06-15 |
 | 7. Suite Parity | v1.1 | Complete    | 2026-06-23 | - |
-| 8. CI for Real | v1.1 | 0/? | Not started | - |
-| 9. Plugin Docs | v1.1 | 0/? | Not started | - |
+| 8. CI for Real | v1.1 | 4/4 | Complete | 2026-07-01 |
+| 8.1 Multi-VO Parallel Legs | v1.1 | 4/4 | Complete | 2026-07-01 |
+| 9. Plugin Docs | v1.1 | 0/1 | Planned | - |
