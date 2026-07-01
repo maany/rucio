@@ -28,7 +28,8 @@ runs green with artifacts, plugin README, then clean rucio-convention stacked-PR
 to maany/rucio (delivery is a manual final step, not a phase).
 
 - [x] Phase 7: Suite-filtering parity — votest POLICY selection, multi_vo 2-VO config, parity guard (completed 2026-06-23)
-- [ ] Phase 8: CI for real — host deps install, full rucio for host suites, artifacts/junit, all 5 legs green
+- [x] Phase 8: CI for real — host deps install, full rucio for host suites, artifacts/junit, all 5 legs green (completed 2026-07-01)
+- [ ] Phase 8.1: multi_vo parallel VO legs — split tst/ts2 into parallel matrix legs (INSERTED)
 - [ ] Phase 9: Plugin docs — tests/ruciopytest/README.md
 
 ## Phase Details
@@ -63,6 +64,20 @@ to maany/rucio (delivery is a manual final step, not a phase).
 - [ ] 08-02-PLAN.md — workflow: 5-leg matrix + setup-python/host plugin deps + votest POLICY + junit/artifacts/host-log capture (CICD-05, CICD-07)
 - [ ] 08-03-PLAN.md — host-side client provisioning: full rucio install + reachable bootstrapped server + cfg/certs + in-container fallback (CICD-06)
 - [ ] 08-04-PLAN.md — live CI green verification: push, gh-watch the 5-leg run, human-verify all green (CICD-08)
+
+### Phase 08.1: multi_vo parallel VO legs + xdist for forwarded suites (INSERTED)
+
+**Goal:** Bring `simple-autotest.yml` wall time to at/below legacy autotest (~36 min) via two
+parallelism fixes: (A) inject xdist into the FORWARDED container runs so remote_dbs/votest stop
+running serially (~41→~15, ~21→~8 min), and (B) split multi_vo's tst/ts2 into two parallel matrix
+legs (~51→~25 min). Net target ~20-25 min. Every leg stays green with its own report.
+**Requirements**: CICD-08 (perf optimization of the CI legs; no new requirement IDs)
+**Depends on:** Phase 8
+**Plans:** 2/4 plans executed
+- [ ] 08.1-01-PLAN.md — multi_vo single-VO selector (RUCIO_MULTI_VO_LEG) + per-VO compose project name (wave 1)
+- [ ] 08.1-01b-PLAN.md — inject xdist into forwarded container runs (remote_dbs/votest) via forwarding.py + tests (wave 1)
+- [ ] 08.1-02-PLAN.md — workflow multi_vo matrix split (tst/ts2) + per-leg unique naming (wave 2)
+- [ ] 08.1-03-PLAN.md — live-CI verify BOTH levers: xdist speedup + multi_vo parallel legs green, ~20-25 min (wave 3, checkpoint)
 
 ### Phase 9: Plugin docs
 **Goal**: A developer can learn to use the plugin from a README without reading the code.

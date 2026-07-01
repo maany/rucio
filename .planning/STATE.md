@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Productionize & Merge
 status: 08-03 shipped -- host-side client leg gets full rucio install + reachable bootstrapped server (ports override + run_tests.sh -i) + rucio_client.cfg/cert wiring, with legacy-faithful in-container fallback on unreachable-server/import failure
-stopped_at: Completed 08-03-PLAN.md
-last_updated: "2026-06-30T11:11:06.638Z"
+stopped_at: Completed 08.1-01-PLAN.md
+last_updated: "2026-07-01T08:15:03.712Z"
 last_activity: 2026-06-30 -- 08-03 executed
 progress:
-  total_phases: 3
-  completed_phases: 1
-  total_plans: 7
-  completed_plans: 6
+  total_phases: 4
+  completed_phases: 2
+  total_plans: 11
+  completed_plans: 9
   percent: 100
 ---
 
@@ -72,6 +72,8 @@ Progress: v1.0 [██████████] 100% | v1.1 [██░░░░�
 | Phase 08 P02 | 2min | 2 tasks | 1 files |
 | Phase 08 P01 | 6min | 2 tasks | 7 files |
 | Phase 08 P03 | 6 | 2 tasks | 1 files |
+| Phase 08.1 P01b | 4min | 2 tasks | 2 files |
+| Phase 08.1 P01 | 2min | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -132,6 +134,8 @@ Recent decisions affecting current work:
 - [Phase 08]: 08-03: host-side client leg uses checked-in etc/certs/* host certs (sed-rewrite cfg) instead of copying certs out of the container
 - [Phase 08]: 08-03: single 'reachable' gate (httpd ping + host pytest --co) switches client between host-side run and legacy in-container fallback; both emit junit to test-results/
 - [Phase 08]: 08-03: bin/ prepended to PATH on host (no console_scripts in pyproject) so test_bin_rucio finds the rucio CLI
+- [Phase 08.1]: 08.1-01b: forwarded xdist is profile-driven in forwarding.py (not a workflow -n flag); multi_vo excluded (children own xdist), injection idempotent + guarded against session.config=None
+- [Phase 08.1]: 08.1-01: selector is env RUCIO_MULTI_VO_LEG (RUCIO_ prefix auto-forwards into container, no forwarding.py change); single-VO leg always streams (forward_stream=True); _activate_multi_vo_base_config defaults to tst when selector unset/unrecognized
 
 ### Pending Todos
 
@@ -140,6 +144,7 @@ None yet.
 ### Roadmap Evolution
 
 - Phase 6 added: Host pytest with optional --run-in-container forwarding to container pytest
+- Phase 8.1 inserted after Phase 8: multi_vo parallel VO legs — split tst/ts2 into parallel matrix legs to cut multi_vo ~51min→~25min wall (URGENT, perf optimization found in 08-04)
 
 ### Blockers/Concerns
 
@@ -149,6 +154,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-30T11:10:14.519Z
-Stopped at: Completed 08-03-PLAN.md
+Last session: 2026-07-01T08:15:03.709Z
+Stopped at: Completed 08.1-01-PLAN.md
 Resume file: None
