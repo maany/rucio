@@ -178,6 +178,8 @@ def test_multi_vo_pytest_cmd_excludes_plugin_metatests_and_uses_xdist(monkeypatc
 
 
 def test_run_multi_vo_order_and_gate(monkeypatch):
+    # Ensure the sequential path is exercised (no single-leg selector leakage).
+    monkeypatch.delenv("RUCIO_MULTI_VO_LEG", raising=False)
     manager = _make_manager("multi_vo")
 
     # Make bootstrap_vo a no-op recorder (it is exercised separately).
@@ -241,6 +243,8 @@ def test_multi_vo_pytest_cmd_forward_stream(monkeypatch):
 def test_run_multi_vo_only_tst_streams(monkeypatch):
     """run_multi_vo streams ONLY the tst child; ts2 runs with the stream env
     stripped so the host junit gets one clean copy of the suite."""
+    # Ensure the sequential path is exercised (no single-leg selector leakage).
+    monkeypatch.delenv("RUCIO_MULTI_VO_LEG", raising=False)
     manager = _make_manager("multi_vo")
     monkeypatch.setattr(manager, "bootstrap_vo", mock.MagicMock())
     monkeypatch.setenv("RUCIO_FORWARD_STREAM", "/rucio_source/.test-forward/x.jsonl")
@@ -331,3 +335,70 @@ def test_setup_invokes_multi_vo_in_order(monkeypatch):
     # _setup_multi_vo is still invoked but is a no-op guard for non-multi_vo;
     # the real method short-circuits. Here it's mocked, so assert run_multi_vo
     # is the real guard (only called for multi_vo).
+
+
+# ---------------------------------------------------------------------------
+# Single-leg selector (RUCIO_MULTI_VO_LEG) + per-VO project name
+# ---------------------------------------------------------------------------
+
+def _run_single_leg(monkeypatch, leg):
+    """Run run_multi_vo() with the single-leg selector set to ``leg`` and
+    return the recorded subprocess.run invocations and the return code."""
+    manager = _make_manager("multi_vo")
+    monkeypatch.setattr(manager, "bootstrap_vo", mock.MagicMock())
+    monkeypatch.setenv("RUCIO_MULTI_VO_LEG", leg)
+    monkeypatch.setenv("RUCIO_FORWARD_STREAM", "/rucio_source/.test-forward/x.jsonl")
+
+    seen = []
+
+    def fake_run(cmd, env=None, **kwargs):
+        seen.append((env["RUCIO_HOME"], _FWD_PLUGIN in cmd))
+        return mock.Mock(returncode=0)
+
+    monkeypatch.setattr("tests.ruciopytest.infra_manager.subprocess.run", fake_run)
+    rc = manager.run_multi_vo()
+    return manager, seen, rc
+
+
+def test_run_multi_vo_single_leg_ts2_streams(monkeypatch):
+    """RUCIO_MULTI_VO_LEG=ts2 -> run EXACTLY the ts2 VO, streamed, return its rc."""
+    manager, seen, rc = _run_single_leg(monkeypatch, "ts2")
+    assert rc == 0
+    # Exactly one child process for the single VO.
+    assert len(seen) == 1
+    home, streams = seen[0]
+    assert home.endswith("/ts2")
+    # The single VO MUST stream its reports to the host junit.
+    assert streams is True
+    # Bootstraps only the selected VO's home.
+    manager.bootstrap_vo.assert_called_once_with("/opt/rucio/etc/multi_vo/ts2")
+
+
+def test_run_multi_vo_single_leg_tst_streams(monkeypatch):
+    """RUCIO_MULTI_VO_LEG=tst -> run EXACTLY the tst VO, streamed, return its rc."""
+    manager, seen, rc = _run_single_leg(monkeypatch, "tst")
+    assert rc == 0
+    assert len(seen) == 1
+    home, streams = seen[0]
+    assert home.endswith("/tst")
+    assert streams is True
+    manager.bootstrap_vo.assert_called_once_with("/opt/rucio/etc/multi_vo/tst")
+
+
+def test_make_project_name_per_vo():
+    """make_project_name yields per-VO-unique compose project names, and the
+    legacy (no-vo) name is byte-identical to today's."""
+    from tests.ruciopytest.container_manager import ContainerManager
+
+    assert (
+        ContainerManager.make_project_name("multi_vo", "postgres14", "tst")
+        == "rucio-test-multi_vo-tst-postgres14"
+    )
+    assert (
+        ContainerManager.make_project_name("multi_vo", "postgres14", "ts2")
+        == "rucio-test-multi_vo-ts2-postgres14"
+    )
+    assert (
+        ContainerManager.make_project_name("multi_vo", "postgres14")
+        == "rucio-test-multi_vo-postgres14"
+    )
