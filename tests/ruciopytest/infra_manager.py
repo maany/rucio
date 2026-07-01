@@ -177,16 +177,33 @@ class InfraManager:
         (``postgresql+psycopg://rucio:rucio@postgres14/rucio``, ``schema=dev``),
         so the cached DB session/engine keep operating on the same schema; only
         the config singleton needs dropping so ``multi_vo`` is re-read as True.
+
+        Leg-aware: when ``RUCIO_MULTI_VO_LEG`` selects a single VO, the base
+        bring-up activates THAT leg's per-VO cfg. For the ``ts2`` leg the base
+        bring-up runs under the ts2 cfg so :meth:`_bootstrap_test_data`
+        provisions ``testvo2`` (client ``vo=testvo2``); for ``tst`` (or when the
+        selector is unset/unrecognized, which defaults to tst) it provisions
+        ``testvo1``. Either way ``super_root``/``ddmlab`` in DEFAULT_VO ``def``
+        is provisioned because both per-VO cfgs are ``multi_vo=True``. This
+        keeps every 08-04 fix in force per leg (super_root/ddmlab, the
+        generic_multi_vo server schema via :meth:`_apply_multi_vo_server_config`,
+        the ``[alembic]`` carry-over, per-VO ``_flush_memcache`` in
+        :meth:`bootstrap_vo`, and the GITHUB_ACTIONS numprocesses cap).
         """
-        tst_home = "/opt/rucio/etc/multi_vo/tst"
-        os.environ["RUCIO_HOME"] = tst_home
+        HOMES = {
+            "tst": "/opt/rucio/etc/multi_vo/tst",
+            "ts2": "/opt/rucio/etc/multi_vo/ts2",
+        }
+        leg = os.environ.get("RUCIO_MULTI_VO_LEG", "").strip()
+        home = HOMES.get(leg, "/opt/rucio/etc/multi_vo/tst")
+        os.environ["RUCIO_HOME"] = home
         try:
             from rucio.common.config import clean_cached_config
             clean_cached_config()
         except Exception as e:  # pragma: no cover - defensive
             print(f"[infra_manager] Warning: could not clear cached config: {e}")
         print(
-            f"[infra_manager] multi_vo: RUCIO_HOME -> {tst_home} "
+            f"[infra_manager] multi_vo: RUCIO_HOME -> {home} "
             "(multi_vo=True active for base bring-up)"
         )
 
@@ -353,11 +370,34 @@ class InfraManager:
         change. Legacy "stop if tst fails" semantics are preserved: ts2 only
         runs when tst passes, and there is NO 2nd DB reset.
 
+        Single-leg selector: when ``RUCIO_MULTI_VO_LEG`` is ``tst`` or ``ts2``,
+        this runs EXACTLY that one VO and returns its exit code. Because the leg
+        has exactly one VO, that VO streams its reports to the host
+        (``forward_stream=True``) with no duplicate-node-id risk. This is the
+        harness contract the parallel-matrix workflow depends on: two runner
+        jobs each run one VO leg. When the selector is unset (local/dev default)
+        the sequential tst->ts2 path below is preserved unchanged.
+
         Returns:
             The exit code of the tst run if it failed, otherwise the ts2 code.
         """
         TST_HOME = "/opt/rucio/etc/multi_vo/tst"
         TS2_HOME = "/opt/rucio/etc/multi_vo/ts2"
+        HOMES = {"tst": TST_HOME, "ts2": TS2_HOME}
+
+        leg = os.environ.get("RUCIO_MULTI_VO_LEG", "").strip()
+        if leg in HOMES:
+            # Single-VO parallel leg: run exactly this one VO, streamed.
+            cmd = self._multi_vo_pytest_cmd(forward_stream=True)
+            self.bootstrap_vo(HOMES[leg])
+            print(
+                f"[infra_manager] Running tests for VO {leg} "
+                "(single-leg selector)"
+            )
+            result = subprocess.run(
+                cmd, env={**os.environ, "RUCIO_HOME": HOMES[leg]}
+            )
+            return result.returncode
 
         # The tst child streams its reports to the host (forward_stream=True) so
         # the host junit reflects the faithful xdist+noparallel execution. The
