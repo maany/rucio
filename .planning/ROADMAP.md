@@ -73,7 +73,7 @@ running serially (~41→~15, ~21→~8 min), and (B) split multi_vo's tst/ts2 int
 legs (~51→~25 min). Net target ~20-25 min. Every leg stays green with its own report.
 **Requirements**: CICD-08 (perf optimization of the CI legs; no new requirement IDs)
 **Depends on:** Phase 8
-**Plans:** 2/4 plans executed
+**Plans:** 3/4 plans executed
 - [ ] 08.1-01-PLAN.md — multi_vo single-VO selector (RUCIO_MULTI_VO_LEG) + per-VO compose project name (wave 1)
 - [ ] 08.1-01b-PLAN.md — inject xdist into forwarded container runs (remote_dbs/votest) via forwarding.py + tests (wave 1)
 - [ ] 08.1-02-PLAN.md — workflow multi_vo matrix split (tst/ts2) + per-leg unique naming (wave 2)

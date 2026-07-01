@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Productionize & Merge
-status: 08-03 shipped -- host-side client leg gets full rucio install + reachable bootstrapped server (ports override + run_tests.sh -i) + rucio_client.cfg/cert wiring, with legacy-faithful in-container fallback on unreachable-server/import failure
-stopped_at: Completed 08.1-01-PLAN.md
-last_updated: "2026-07-01T08:15:03.712Z"
-last_activity: 2026-06-30 -- 08-03 executed
+status: 08.1-02 shipped -- multi_vo matrix split into two parallel runner jobs (vo=tst / vo=ts2) with per-leg unique naming via matrix.leg and RUCIO_MULTI_VO_LEG env export; the 4 non-multi_vo legs stay byte-identical to the Phase 8 baseline
+stopped_at: Completed 08.1-02-PLAN.md
+last_updated: "2026-07-01T08:18:53.786Z"
+last_activity: 2026-07-01 -- 08.1-02 executed
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 11
-  completed_plans: 9
+  completed_plans: 10
   percent: 100
 ---
 
@@ -27,9 +27,9 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 
 Milestone: v1.1 Productionize & Merge (in progress)
 Phase: 8 of 9 (CI for real) -- in progress
-Plan: 08-03 complete (host-side client provisioning + in-container fallback); 08-02/08-01 prior
-Status: 08-03 shipped -- host-side client leg gets full rucio install + reachable bootstrapped server (ports override + run_tests.sh -i) + rucio_client.cfg/cert wiring, with legacy-faithful in-container fallback on unreachable-server/import failure
-Last activity: 2026-06-30 -- 08-03 executed
+Plan: 08.1-02 complete (multi_vo parallel VO legs); 08.1-01b / 08.1-01 prior
+Status: 08.1-02 shipped -- multi_vo matrix split into two parallel runner jobs (vo=tst / vo=ts2) with per-leg unique naming via matrix.leg and RUCIO_MULTI_VO_LEG env export; the 4 non-multi_vo legs stay byte-identical to the Phase 8 baseline
+Last activity: 2026-07-01 -- 08.1-02 executed
 
 Progress: v1.0 [██████████] 100% | v1.1 [██░░░░░░░░] 17%
 
@@ -74,6 +74,7 @@ Progress: v1.0 [██████████] 100% | v1.1 [██░░░░�
 | Phase 08 P03 | 6 | 2 tasks | 1 files |
 | Phase 08.1 P01b | 4min | 2 tasks | 2 files |
 | Phase 08.1 P01 | 2min | 3 tasks | 4 files |
+| Phase 08.1 P02 | 2min | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -136,6 +137,7 @@ Recent decisions affecting current work:
 - [Phase 08]: 08-03: bin/ prepended to PATH on host (no console_scripts in pyproject) so test_bin_rucio finds the rucio CLI
 - [Phase 08.1]: 08.1-01b: forwarded xdist is profile-driven in forwarding.py (not a workflow -n flag); multi_vo excluded (children own xdist), injection idempotent + guarded against session.config=None
 - [Phase 08.1]: 08.1-01: selector is env RUCIO_MULTI_VO_LEG (RUCIO_ prefix auto-forwards into container, no forwarding.py change); single-VO leg always streams (forward_stream=True); _activate_multi_vo_base_config defaults to tst when selector unset/unrecognized
+- [Phase 08.1]: 08.1-02: matrix.leg label decouples naming from suite (leg==suite for 4 baseline legs); multi_vo split into vo=tst/ts2 parallel legs selected via RUCIO_MULTI_VO_LEG env
 
 ### Pending Todos
 
@@ -154,6 +156,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-01T08:15:03.709Z
-Stopped at: Completed 08.1-01-PLAN.md
+Last session: 2026-07-01T08:18:53.783Z
+Stopped at: Completed 08.1-02-PLAN.md
 Resume file: None
