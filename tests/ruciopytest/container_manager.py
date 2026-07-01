@@ -123,12 +123,23 @@ class ContainerManager:
         self._restore_signal_handlers()
 
     @staticmethod
-    def make_project_name(suite_name: str, rdbms: str) -> str:
-        """Build a compose project name from suite and RDBMS.
+    def make_project_name(
+        suite_name: str, rdbms: str, vo: "str | None" = None
+    ) -> str:
+        """Build a compose project name from suite, RDBMS, and optional VO.
 
         Returns a string like ``rucio-test-remote_dbs-postgres14``
-        (SUIT-05).
+        (SUIT-05). When ``vo`` is truthy, the VO is inserted to yield a
+        per-VO-unique name like ``rucio-test-multi_vo-tst-postgres14``.
+
+        The per-VO variant keeps the compose *network* name unique per VO too
+        (the network name derives from the project name), so two multi_vo VO
+        legs (tst, ts2) can run as parallel matrix legs without their compose
+        stacks colliding. ``PROJECT_PREFIX`` is unchanged either way, so
+        orphan-cleanup still matches on ``rucio-test-``.
         """
+        if vo:
+            return f"rucio-test-{suite_name}-{vo}-{rdbms}"
         return f"rucio-test-{suite_name}-{rdbms}"
 
     # ------------------------------------------------------------------

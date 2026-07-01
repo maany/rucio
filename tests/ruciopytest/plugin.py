@@ -324,7 +324,10 @@ def pytest_configure(config: pytest.Config) -> None:
             os.environ.setdefault("RDBMS", profile.rdbms)
             from .container_manager import ContainerManager
 
-            project_name = ContainerManager.make_project_name(profile.name, profile.rdbms)
+            # Two parallel multi_vo VO legs need distinct compose stacks, so
+            # thread the leg selector into the project name (per-VO-unique).
+            mv_leg = os.environ.get("RUCIO_MULTI_VO_LEG") if profile.name == "multi_vo" else None
+            project_name = ContainerManager.make_project_name(profile.name, profile.rdbms, mv_leg)
             cm = ContainerManager(project_name, profile.compose_profiles, str(config.rootdir))
             cm.start()
             config.stash[container_manager_key] = cm
