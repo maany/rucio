@@ -102,7 +102,9 @@ The `multi_vo` suite exercises two virtual organisations: `tst` (`testvo1`) and
 `/opt/rucio/etc/multi_vo/{tst,ts2}/etc` ([`multi_vo_support.py`](multi_vo_support.py))
 and, by default, runs both VOs. The `RUCIO_MULTI_VO_LEG` environment variable
 selects a single VO leg (`tst` or `ts2`); this is how CI parallelizes multi_vo
-into two independent jobs. Unset or unrecognized values default to `tst`.
+into two independent jobs. When unset or set to an unrecognized value, both VOs run
+sequentially: `tst` first, then `ts2` only if `tst` passed (see
+[`infra_manager.py`](infra_manager.py) `run_multi_vo`).
 
 ### Forwarded xdist (parallel workers)
 
@@ -345,8 +347,9 @@ it.
 ### Wrong VO / multi-VO config issues
 
 - **Symptom:** a `multi_vo` run exercises the wrong VO, or you want just one.
-- **Cause:** `RUCIO_MULTI_VO_LEG` is unset (defaults to `tst`) or set to an
-  unrecognized value (also defaults to `tst`).
+- **Cause:** `RUCIO_MULTI_VO_LEG` is set to a specific leg (`tst`/`ts2`) when you
+  wanted both, or is unset / set to an unrecognized value (which runs both VOs
+  sequentially) when you wanted just one.
 - **Fix:** set `RUCIO_MULTI_VO_LEG=tst` or `=ts2` to select the leg; leave it
   unset to run both.
 
