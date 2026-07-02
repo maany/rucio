@@ -31,6 +31,9 @@ to maany/rucio (delivery is a manual final step, not a phase).
 - [x] Phase 8: CI for real — host deps install, full rucio for host suites, artifacts/junit, all 5 legs green (completed 2026-07-01)
 - [x] Phase 8.1: multi_vo parallel VO legs — split tst/ts2 into parallel matrix legs (INSERTED)
 - [ ] Phase 9: Plugin docs — tests/ruciopytest/README.md
+- [x] Phase 10: Docs & traceability cleanup — README env-var fix + SUIT-09 frontmatter backfill + STATE version reconcile (gap closure, audit v1.1) (completed 2026-07-02)
+- [ ] Phase 11: simplify_votests workflow — new nightly/dispatch votest workflow (atlas + belleii), plugin-driven (gap closure, audit v1.1)
+- [ ] Phase 12: multi_vo legacy parity — revert 8.1 split, single shared-DB sequential leg (tst→ts2, gate) in simple-autotest.yml (gap closure, audit v1.1)
 
 ## Phase Details
 
@@ -90,6 +93,42 @@ legs (~51→~25 min). Net target ~20-25 min. Every leg stays green with its own 
 **Plans:** 1 plan
 - [x] 09-01-PLAN.md — write tests/ruciopytest/README.md (Quickstart → How it works → Suite table → CLI reference → Examples → CI mapping → Troubleshooting), grounded in plugin.py/profiles.py/forwarding.py/multi_vo_support.py + post-8.1 simple-autotest.yml (DOC-01)
 
+### Phase 10: Docs & traceability cleanup (gap closure — audit v1.1)
+**Goal**: The shipped docs and planning metadata are accurate — no reader is misled and traceability is internally consistent.
+**Depends on**: Phase 9
+**Requirements**: DOC-01 (accuracy hardening; already satisfied), plus planning-metadata fixes (no new REQ IDs)
+**Gap Closure**: Closes tech-debt items from `.planning/v1.1-MILESTONE-AUDIT.md`
+**Success Criteria**:
+  1. `tests/ruciopytest/README.md` no longer claims `RUCIO_MULTI_VO_LEG` "defaults to `tst`" (lines ~105 and ~348-349); it states that unset/unrecognized runs both VOs sequentially, matching `infra_manager.py:388-400` and the README's own "How it works" section
+  2. `07-03-SUMMARY.md` frontmatter lists `requirements-completed: [SUIT-09]`
+  3. `.planning/STATE.md` frontmatter milestone reconciled to `v1.1` (matching ROADMAP/REQUIREMENTS; `v1.0` = shipped Pytest Test-Runner)
+
+**Plans:** 1/1 plans complete
+- [ ] 10-01-PLAN.md — README RUCIO_MULTI_VO_LEG "defaults to tst" fix (2 spots) + 07-03-SUMMARY requirements-completed:[SUIT-09] backfill + STATE.md milestone v1.0→v1.1 reconcile (DOC-01)
+
+### Phase 11: simplify_votests workflow (gap closure — audit v1.1)
+**Goal**: The policy (votest) tests run in CI for BOTH policies, mimicking legacy `vo_tests.yml` behaviour but driven by the ruciopytest plugin — restoring the belleii coverage that PR CI currently omits.
+**Depends on**: Phase 8.1 (post-split votest leg shape), Phase 7 (votest POLICY selection)
+**Requirements**: SUIT-07 (votest coverage extended to belleii; already satisfied for atlas)
+**Gap Closure**: Closes the votest-belleii CI-coverage gap from `.planning/v1.1-MILESTONE-AUDIT.md`
+**Success Criteria**:
+  1. New `.github/workflows/simplify_votests.yml` exists, triggered on `schedule` (nightly) + `workflow_dispatch` (mirroring legacy `vo_tests.yml` cadence, not per-PR)
+  2. It runs a policy matrix of both `atlas` and `belleii` via the plugin (`python -m pytest --suite=votest --policy=<X>`), with runtime-images, host deps, junit artifacts, and a per-policy report
+  3. Both policy legs pass green on a manual `workflow_dispatch` run
+  4. Decision recorded (in the plan) on whether the fast atlas smoke stays in `simple-autotest.yml` per-PR or votest moves entirely into the new workflow (pure legacy match)
+
+### Phase 12: multi_vo legacy parity (gap closure — audit v1.1)
+**Goal**: `multi_vo` CI runs both VOs (tst→ts2) **sequentially against one shared instance/DB**, matching legacy `run_multi_vo_tests_docker.sh`, restoring the shared-DB multi-tenancy coverage and stop-on-failure gate that the Phase 8.1 parallel split removed. Deliberately trades the 8.1 wall-time win for legacy-faithful correctness.
+**Depends on**: Phase 8.1 (undoes its multi_vo matrix split), Phase 7 (multi_vo 2-VO setup)
+**Requirements**: SUIT-08 (multi_vo faithfulness; already satisfied), closes the multi_vo integration gap from the audit
+**Gap Closure**: Closes the "multi_vo tst→ts2 shared-DB sequential gate has no live-CI coverage" gap from `.planning/v1.1-MILESTONE-AUDIT.md` (Item 4)
+**Rationale (grounded in upstream data)**: rucio/rucio autotest runs multi_vo as one leg per Python version at ~33-37 min (both VOs sequential, shared DB, xdist inside), parallelized only across Python versions — not across VOs. This is the legacy behaviour to match.
+**Success Criteria**:
+  1. `simple-autotest.yml` runs `multi_vo` as a **single** matrix leg with `RUCIO_MULTI_VO_LEG` **unset**, so `InfraManager.run_multi_vo()` takes the sequential shared-DB path (`infra_manager.py:402-428`): tst runs first, ts2 runs only on tst success, no DB reset between VOs, both against the same instance
+  2. The two parallel per-VO legs (`multi_vo-tst` / `multi_vo-ts2` on separate compose stacks) introduced in 8.1 are removed from the matrix
+  3. The multi_vo leg is green on a PR run, with tst→ts2 both executed on one shared DB (verify via logs: "Running tests for VO tst" then "Running tests for VO ts2", no inter-VO reset)
+  4. junit/report/naming for the single multi_vo leg restored to non-split form; README CI-mapping + any 8.1 parity notes updated to reflect the reverted single-leg model and the accepted ~35 min long-pole
+
 ## Progress
 
 | Phase | Milestone | Plans | Status | Completed |
@@ -104,3 +143,6 @@ legs (~51→~25 min). Net target ~20-25 min. Every leg stays green with its own 
 | 8. CI for Real | v1.1 | 4/4 | Complete | 2026-07-01 |
 | 8.1 Multi-VO Parallel Legs | v1.1 | 4/4 | Complete | 2026-07-01 |
 | 9. Plugin Docs | v1.1 | 0/1 | Planned | - |
+| 10. Docs & Traceability Cleanup | 1/1 | Complete   | 2026-07-02 | - |
+| 11. simplify_votests Workflow | v1.1 | 0/? | Planned (gap closure) | - |
+| 12. multi_vo Legacy Parity | v1.1 | 0/? | Planned (gap closure) | - |

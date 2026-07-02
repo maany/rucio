@@ -2,13 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Productionize & Merge
-status: unknown
-last_updated: "2026-07-01T11:21:37.740Z"
+status: completed
+stopped_at: Completed 10-01-PLAN.md
+last_updated: "2026-07-02T11:53:15.229Z"
+last_activity: 2026-07-02 -- 10-01 executed (docs and traceability cleanup)
 progress:
-  total_phases: 10
-  completed_phases: 10
-  total_plans: 27
-  completed_plans: 27
+  total_phases: 13
+  completed_phases: 11
+  total_plans: 28
+  completed_plans: 28
 ---
 
 # Project State
@@ -23,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 ## Current Position
 
 Milestone: v1.1 Productionize & Merge (in progress)
-Phase: 9 of 9 (Plugin docs) -- complete
-Plan: 09-01 complete (ruciopytest README, DOC-01 closed) -- Phase 08.1 done prior
-Status: 09-01 shipped -- tests/ruciopytest/README.md (363 lines): quickstart, how-it-works (host vs forwarded, DB lifecycle, multi-VO, forwarded xdist), 4-row suite table, 10-flag CLI reference, per-flag examples, post-8.1 CI leg->command mapping, test.sh migration, troubleshooting. Grounded in source; DOC-01 complete
-Last activity: 2026-07-01 -- 09-01 executed (plugin README)
+Phase: 10 of 13 (Docs and traceability cleanup) -- complete
+Plan: 10-01 complete (v1.1-audit gap closure, DOC-01 closed) -- Phase 09 (plugin docs) done prior
+Status: 10-01 shipped -- three mechanical gap-closure edits from the v1.1 milestone audit: (1) README RUCIO_MULTI_VO_LEG unset/unrecognized now correctly documented as "both VOs run sequentially (tst then ts2)" matching infra_manager.py:388-400; (2) 07-03-SUMMARY.md frontmatter backfilled requirements-completed: [SUIT-09]; (3) STATE.md milestone frontmatter reconciled v1.0 -> v1.1. No source-code behavior change
+Last activity: 2026-07-02 -- 10-01 executed (docs and traceability cleanup)
 
 Progress: v1.0 [██████████] 100% | v1.1 [██░░░░░░░░] 17%
 
@@ -74,6 +76,7 @@ Progress: v1.0 [██████████] 100% | v1.1 [██░░░░�
 | Phase 08.1 P02 | 2min | 2 tasks | 1 files |
 | Phase 08.1 P03 | 32min | 2 tasks | 2 files |
 | Phase 09 P01 | 2min | 2 tasks | 1 files |
+| Phase 10-docs-and-traceability-cleanup P01 | 2min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -139,6 +142,7 @@ Recent decisions affecting current work:
 - [Phase 08.1]: 08.1-02: matrix.leg label decouples naming from suite (leg==suite for 4 baseline legs); multi_vo split into vo=tst/ts2 parallel legs selected via RUCIO_MULTI_VO_LEG env
 - [Phase 08.1]: 08.1-03: LIVE-CI VERIFIED both levers on PR run 28503879697 (sha 70cdaafa8) — 7/7 jobs green; multi_vo-tst/ts2 overlap (parallel) with distinct artifacts; forwarded xdist material (remote_dbs 41->28m, votest 21->15m); total wall 51m31s->30m50s (below legacy ~36m). xdist speedup more modest than the optimistic ~15m/~8m estimate but material+green (CPU-bound container at numprocesses=3). host-logs-* are on-failure-only, so xdist worker proof taken from local ts2 repro (created 3/3 workers gw0..gw2)
 - [Phase 09]: 09-01: ruciopytest README grounded in source (plugin.py/profiles.py/forwarding.py/simple-autotest.yml); quickstart uses client host-side suite; output shown only for --co/--dry-run
+- [Phase 10-docs-and-traceability-cleanup]: 10-01: README RUCIO_MULTI_VO_LEG unset/unrecognized documented as 'both VOs run sequentially (tst then ts2)' per infra_manager.py:388-400; STATE.md milestone reconciled v1.0->v1.1; SUIT-09 backfilled into 07-03-SUMMARY
 
 ### Pending Todos
 
@@ -157,6 +161,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-01T11:18:19.834Z
-Stopped at: Completed 09-01-PLAN.md
+Last session: 2026-07-02T11:52:12.046Z
+Stopped at: Completed 10-01-PLAN.md
 Resume file: None

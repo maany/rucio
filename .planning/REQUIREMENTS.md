@@ -54,6 +54,20 @@ Which phases cover which requirements. Updated during roadmap creation.
 - Mapped to phases: 8 (provisional — roadmapper confirms)
 - Unmapped: 0
 
+### Gap-Closure Phases (from audit v1.1, 2026-07-01)
+
+The v1.1 milestone audit found all 8 requirements **satisfied** (no unsatisfied requirements,
+no blockers). Phases 10-11 close non-blocking tech-debt / coverage gaps; they harden already-
+satisfied requirements rather than close unmet ones, so statuses above stay `Complete`.
+
+| Gap-closure phase | Hardens | Closes |
+|-------------------|---------|--------|
+| Phase 10 | DOC-01 (accuracy) | README `RUCIO_MULTI_VO_LEG` "defaults to tst" bug; SUIT-09 SUMMARY-frontmatter backfill; STATE.md version reconcile |
+| Phase 11 | SUIT-07 (votest coverage) | belleii policy never run in CI — new `simplify_votests.yml` (nightly/dispatch, atlas + belleii) |
+| Phase 12 | SUIT-08 (multi_vo faithfulness) | multi_vo runs both VOs sequentially on a shared DB (legacy parity) — revert 8.1 split, single leg in `simple-autotest.yml` |
+
+Deferred (not planned): automated README staleness check.
+
 ---
 *Requirements defined: 2026-06-15*
-*Last updated: 2026-06-15 after v1.1 milestone start*
+*Last updated: 2026-07-01 — added gap-closure phases 10-11 from v1.1 milestone audit*
