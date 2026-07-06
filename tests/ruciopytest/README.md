@@ -100,11 +100,11 @@ faster for iterating, at the cost of potentially stale state.
 The `multi_vo` suite exercises two virtual organisations: `tst` (`testvo1`) and
 `ts2` (`testvo2`). It generates a per-VO `rucio.cfg` under
 `/opt/rucio/etc/multi_vo/{tst,ts2}/etc` ([`multi_vo_support.py`](multi_vo_support.py))
-and, by default, runs both VOs. The `RUCIO_MULTI_VO_LEG` environment variable
-selects a single VO leg (`tst` or `ts2`); this is how CI parallelizes multi_vo
-into two independent jobs. When unset or set to an unrecognized value, both VOs run
-sequentially: `tst` first, then `ts2` only if `tst` passed (see
-[`infra_manager.py`](infra_manager.py) `run_multi_vo`).
+and, by default, runs both VOs. The `RUCIO_MULTI_VO_LEG` environment variable is a
+local/dev override that selects a single VO leg (`tst` or `ts2`). CI leaves it
+**unset**, so both VOs run sequentially on one shared DB: `tst` first, then `ts2`
+only if `tst` passed (see [`infra_manager.py`](infra_manager.py) `run_multi_vo`).
+When unset or set to an unrecognized value, both VOs run sequentially.
 
 ### Forwarded xdist (parallel workers)
 
@@ -288,19 +288,21 @@ with the equivalent command below.
 | ------ | --------------------- | ------------------------ |
 | `remote_dbs` (py3.9) | `RDBMS=postgres14 PYTHON=3.9` | `python -m pytest --suite=remote_dbs tests/` |
 | `remote_dbs` (py3.10) | `RDBMS=postgres14 PYTHON=3.10` | `python -m pytest --suite=remote_dbs tests/` (py3.10 image) |
-| `multi_vo-tst` | `RDBMS=postgres14 PYTHON=3.9 RUCIO_MULTI_VO_LEG=tst` | `RUCIO_MULTI_VO_LEG=tst python -m pytest --suite=multi_vo tests/` |
-| `multi_vo-ts2` | `RDBMS=postgres14 PYTHON=3.9 RUCIO_MULTI_VO_LEG=ts2` | `RUCIO_MULTI_VO_LEG=ts2 python -m pytest --suite=multi_vo tests/` |
+| `multi_vo` | `RDBMS=postgres14 PYTHON=3.9` | `python -m pytest --suite=multi_vo tests/` (runs tst then ts2 sequentially, shared DB) |
 | `client` | `RDBMS=postgres14 PYTHON=3.9` | `python -m pytest --suite=client tests/` |
 | `votest` | `RDBMS=postgres14 PYTHON=3.9 POLICY=atlas` | `python -m pytest --suite=votest --policy=atlas tests/` |
 
 Notes for reproducing a leg:
 
-- **`multi_vo` is split into two parallel VO legs** (`multi_vo-tst` and
-  `multi_vo-ts2`), each its own runner job with its own compose stack. They share
-  `suite=multi_vo` + py3.9 + postgres14, so the `leg` label disambiguates them
-  and `RUCIO_MULTI_VO_LEG` (auto-forwarded because of the `RUCIO_` prefix)
-  selects the single VO each job runs. See `simple-autotest.yml` around the
-  `matrix.include` block.
+- **`multi_vo` is a single sequential leg** (legacy parity): one runner job with
+  one compose stack running both VOs against **one shared instance/DB** — `tst`
+  first, then `ts2` only if `tst` passed. CI leaves `RUCIO_MULTI_VO_LEG` **unset**
+  (no `vo:` field in the matrix), so `run_multi_vo()` takes the sequential
+  shared-DB path, matching legacy `run_multi_vo_tests_docker.sh`. Accepted
+  trade-off: no cross-VO parallelism, so multi_vo is the ~35 min long-pole — the
+  8.1 wall-time win is deliberately traded for legacy-faithful shared-DB
+  correctness. `RUCIO_MULTI_VO_LEG=tst|ts2` remains a local/dev single-VO
+  override. See `simple-autotest.yml` around the `matrix.include` block.
 - **Forwarded suites get xdist workers injected** inside the container (3 on CI
   via `GITHUB_ACTIONS=true`), so `remote_dbs` and `votest` run in parallel.
 - The full CI invocation adds reporting flags —
