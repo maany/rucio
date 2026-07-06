@@ -771,8 +771,9 @@ class InfraManager:
         from rucio.client import Client
         from rucio.common.config import config_get, config_get_bool
         from rucio.common.constants import DEFAULT_VO
-        from rucio.common.exception import Duplicate, RucioException
+        from rucio.common.exception import Duplicate, DuplicateContent, RucioException
         from rucio.common.types import InternalAccount
+        from rucio.common.utils import extract_scope
         from rucio.core.account import add_account_attribute
         from rucio.core.vo import map_vo
         from rucio.gateway.vo import add_vo
@@ -837,6 +838,45 @@ class InfraManager:
                 client.add_scope('root', 'archive')
             except Duplicate:
                 print('[infra_manager] Scope archive already added')
+
+            # The belleii votest DIRAC tests build LFNs under ``/belle`` and
+            # resolve their scope against the set of EXISTING scopes, then require
+            # that scope + the ``/belle*`` container DID hierarchy to exist (see
+            # lib/rucio/core/dirac.py). Upstream provisions these in a separate
+            # bootstrap step (tools/bootstrap_tests.py::belleii_bootstrap); the
+            # plugin path must do the same, otherwise the DIRAC tests raise
+            # ScopeNotFound. Ported verbatim from belleii_bootstrap(), kept
+            # idempotent (Duplicate/DuplicateContent tolerant).
+            if self._profile.policy == 'belleii':
+                print('[infra_manager] Bootstrapping belleii scopes and /belle DID hierarchy')
+                belleii_scopes = ['raw', 'hraw', 'other', 'mc_tmp', 'mc', 'test',
+                                  'user', 'data', 'data_tmp', 'group', 'mock']
+                for scope in belleii_scopes:
+                    try:
+                        client.add_scope(scope=scope, account='root')
+                    except Duplicate:
+                        pass
+                    except Exception as err:
+                        print(f'[infra_manager] {err}')
+
+                belleii_lpns = ['/belle', '/belle/mc', '/belle/Data', '/belle/user',
+                                '/belle/raw', '/belle/mock']
+                for lpn in belleii_lpns:
+                    scope, name = extract_scope(lpn)
+                    try:
+                        client.add_did(scope=scope, name=name, did_type='CONTAINER')
+                    except Duplicate:
+                        pass
+                    except Exception as err:
+                        print(f'[infra_manager] {err}')
+                    if name != '/belle':
+                        try:
+                            client.attach_dids(scope='other', name='/belle',
+                                               dids=[{'scope': str(scope), 'name': str(name)}])
+                        except DuplicateContent:
+                            pass
+                        except Exception as err:
+                            print(f'[infra_manager] {err}')
 
             print("[infra_manager] Test data bootstrap completed")
 
