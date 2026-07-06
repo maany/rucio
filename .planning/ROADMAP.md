@@ -138,6 +138,10 @@ legs (~51→~25 min). Net target ~20-25 min. Every leg stays green with its own 
   3. The multi_vo leg is green on a PR run, with tst→ts2 both executed on one shared DB (verify via logs: "Running tests for VO tst" then "Running tests for VO ts2", no inter-VO reset)
   4. junit/report/naming for the single multi_vo leg restored to non-split form; README CI-mapping + any 8.1 parity notes updated to reflect the reverted single-leg model and the accepted ~35 min long-pole
 
+**Plans:** 1/2 plans executed
+- [x] 12-01-PLAN.md — revert 8.1 matrix split: single multi_vo leg (no `vo:`, RUCIO_MULTI_VO_LEG unset → sequential shared-DB path) in simple-autotest.yml + README CI-mapping/parity doc sync (SUIT-08)
+- [ ] 12-02-PLAN.md — live-CI verify: push, watch multi_vo leg green on PR, prove sequential branch via logs ("Running tests for VO tst" → "ts2", no reset), human-verify (SUIT-08)
+
 ## Progress
 
 | Phase | Milestone | Plans | Status | Completed |
@@ -154,4 +158,4 @@ legs (~51→~25 min). Net target ~20-25 min. Every leg stays green with its own 
 | 9. Plugin Docs | v1.1 | 0/1 | Planned | - |
 | 10. Docs & Traceability Cleanup | 1/1 | Complete    | 2026-07-02 | - |
 | 11. simplify_votests Workflow | 2/2 | Complete    | 2026-07-06 | - |
-| 12. multi_vo Legacy Parity | v1.1 | 0/? | Planned (gap closure) | - |
+| 12. multi_vo Legacy Parity | 1/2 | In Progress|  | - |

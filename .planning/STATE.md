@@ -1,14 +1,17 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
+milestone: v1.1
 milestone_name: Productionize & Merge
-status: unknown
-last_updated: "2026-07-06T10:14:59.134Z"
+status: "11-02 shipped -- simplify_votests.yml PROVEN GREEN live on maany/rucio for BOTH policies via the plugin path. First live belleii plugin-path run surfaced 3 ScopeNotFound failures in tests/test_belleii.py DIRAC tests (test_dirac_addfile*); root cause was the missing belleii scope set + /belle CONTAINER DID hierarchy that upstream provisions via tools/bootstrap_tests.py::belleii_bootstrap but the plugin's InfraManager._bootstrap_test_data() omitted. Ported belleii_bootstrap into _bootstrap_test_data() POLICY-gated (commit 79eeb27b8); re-ran green -- votest-atlas + votest-belleii both success on dispatch run 28782189273 and PR run 28782165867. ROADMAP success criterion #3 met; belleii plugin path proven live for the first time"
+stopped_at: Completed 12-01-PLAN.md
+last_updated: "2026-07-06T11:06:18.056Z"
+last_activity: 2026-07-06 -- 11-02 executed (live votest verification, belleii bootstrap fix, both legs green)
 progress:
-  total_phases: 13
-  completed_phases: 12
-  total_plans: 30
-  completed_plans: 30
+  total_phases: 7
+  completed_phases: 6
+  total_plans: 17
+  completed_plans: 16
+  percent: 100
 ---
 
 # Project State
@@ -23,9 +26,12 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 ## Current Position
 
 Milestone: v1.1 Productionize & Merge (in progress)
-Phase: 11 of 13 (Simplify VO-tests workflow) -- both plans complete (pending phase verification)
-Plan: 11-02 complete (live two-policy votest verification) -- Phase 11 plans done
-Status: 11-02 shipped -- simplify_votests.yml PROVEN GREEN live on maany/rucio for BOTH policies via the plugin path. First live belleii plugin-path run surfaced 3 ScopeNotFound failures in tests/test_belleii.py DIRAC tests (test_dirac_addfile*); root cause was the missing belleii scope set + /belle CONTAINER DID hierarchy that upstream provisions via tools/bootstrap_tests.py::belleii_bootstrap but the plugin's InfraManager._bootstrap_test_data() omitted. Ported belleii_bootstrap into _bootstrap_test_data() POLICY-gated (commit 79eeb27b8); re-ran green -- votest-atlas + votest-belleii both success on dispatch run 28782189273 and PR run 28782165867. ROADMAP success criterion #3 met; belleii plugin path proven live for the first time
+Phase: 12 of 13 (multi_vo legacy parity) -- 12-01 complete, 12-02 (live verify) pending
+Plan: 12-01 complete (revert 8.1 multi_vo split -> single sequential shared-DB leg + README sync)
+Status (12-01): simple-autotest.yml matrix now has ONE `leg: multi_vo` (no `vo:` field) replacing the parallel multi_vo-tst/multi_vo-ts2 legs; RUCIO_MULTI_VO_LEG resolves empty so run_multi_vo() takes the sequential shared-DB path (tst -> ts2, gated). No infra_manager.py change (sequential branch pre-existed); junit/report names auto-revert to multi_vo-py3.9.* via matrix.leg. README CI-mapping table + parity notes synced. Commits d8dbd6104 (refactor), fb7500776 (docs). SUIT-08 marked complete. Next: 12-02 live-CI green verification.
+Last activity: 2026-07-06 -- 12-01 executed (multi_vo split revert + README doc sync)
+
+Prior status: 11-02 shipped -- simplify_votests.yml PROVEN GREEN live on maany/rucio for BOTH policies via the plugin path. First live belleii plugin-path run surfaced 3 ScopeNotFound failures in tests/test_belleii.py DIRAC tests (test_dirac_addfile*); root cause was the missing belleii scope set + /belle CONTAINER DID hierarchy that upstream provisions via tools/bootstrap_tests.py::belleii_bootstrap but the plugin's InfraManager._bootstrap_test_data() omitted. Ported belleii_bootstrap into _bootstrap_test_data() POLICY-gated (commit 79eeb27b8); re-ran green -- votest-atlas + votest-belleii both success on dispatch run 28782189273 and PR run 28782165867. ROADMAP success criterion #3 met; belleii plugin path proven live for the first time
 Last activity: 2026-07-06 -- 11-02 executed (live votest verification, belleii bootstrap fix, both legs green)
 
 Progress: v1.0 [██████████] 100% | v1.1 [██░░░░░░░░] 17%
@@ -76,6 +82,7 @@ Progress: v1.0 [██████████] 100% | v1.1 [██░░░░�
 | Phase 09 P01 | 2min | 2 tasks | 1 files |
 | Phase 10-docs-and-traceability-cleanup P01 | 2min | 3 tasks | 3 files |
 | Phase 11 P01 | 3min | 2 tasks | 2 files |
+| Phase 12 P01 | 4min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -144,6 +151,7 @@ Recent decisions affecting current work:
 - [Phase 10-docs-and-traceability-cleanup]: 10-01: README RUCIO_MULTI_VO_LEG unset/unrecognized documented as 'both VOs run sequentially (tst then ts2)' per infra_manager.py:388-400; STATE.md milestone reconciled v1.0->v1.1; SUIT-09 backfilled into 07-03-SUMMARY
 - [Phase 11]: 11-01: dedicated simplify_votests.yml runs atlas+belleii via plugin (--suite=votest --policy=<X>); per-PR+push+nightly cadence matches legacy vo_tests.yml and supersedes ROADMAP criterion #1 'not per-PR'; votest leg removed from simple-autotest.yml (5 legs remain)
 - [Phase 11]: 11-02: LIVE-VERIFIED both votest legs green on maany/rucio (dispatch run 28782189273 + PR run 28782165867, sha 79eeb27b8). belleii plugin path proven live for the first time -- surfaced 3 ScopeNotFound DIRAC failures (test_dirac_addfile*); fix = ported belleii_bootstrap (belleii scope set + /belle CONTAINER DID hierarchy) into InfraManager._bootstrap_test_data(), POLICY-gated + idempotent (commit 79eeb27b8). DEVIATION: files_modified expanded to tests/ruciopytest/infra_manager.py (plan-anticipated: "add minimal provisioning if plugin does not config belleii"); workflow YAML unchanged. belleii provisioning belongs in the plugin, not the workflow, since the plugin owns setup+run in one pytest process
+- [Phase 12]: 12-01: reverted 8.1 multi_vo split by dropping the vo: field entirely (one leg: multi_vo, no vo:), so RUCIO_MULTI_VO_LEG resolves empty and run_multi_vo() falls through to the pre-existing sequential shared-DB branch -- zero infra_manager.py change; junit/report names auto-revert to multi_vo-py3.9.* via matrix.leg; tst/ts2 kept as local/dev override; README CI-mapping + parity notes synced
 
 ### Pending Todos
 
@@ -162,6 +170,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-06T09:06:02.963Z
-Stopped at: Completed 11-01-PLAN.md
+Last session: 2026-07-06T11:06:05.041Z
+Stopped at: Completed 12-01-PLAN.md
 Resume file: None
