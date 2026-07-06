@@ -159,7 +159,12 @@ class ContainerManager:
         try:
             result = subprocess.run(
                 cmd,
-                timeout=600,
+                # The py3.10 image builds boost + gfal2-python from source
+                # (no prebuilt gfal2-python3 package for 3.10), which runs
+                # ~9-10 min and sits right at the old 600s ceiling -- causing
+                # intermittent "Timed out building rucio test image" failures
+                # on slower runners. 1200s gives that from-source build headroom.
+                timeout=1200,
             )
         except subprocess.TimeoutExpired:
             raise RuntimeError("Timed out building rucio test image")
