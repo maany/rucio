@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Productionize & Merge
 status: completed
-stopped_at: Completed 11-01-PLAN.md
-last_updated: "2026-07-06T09:06:10.475Z"
-last_activity: 2026-07-02 -- 10-01 executed (docs and traceability cleanup)
+stopped_at: Completed 11-02-PLAN.md
+last_updated: "2026-07-06T09:56:00.000Z"
+last_activity: 2026-07-06 -- 11-02 executed (live two-policy votest verification, belleii green)
 progress:
   total_phases: 7
   completed_phases: 5
@@ -26,10 +26,10 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 ## Current Position
 
 Milestone: v1.1 Productionize & Merge (in progress)
-Phase: 11 of 13 (Simplify VO-tests workflow) -- in progress
-Plan: 11-01 complete (dedicated votest workflow) -- 11-02 (live verification) next
-Status: 11-01 shipped -- new .github/workflows/simplify_votests.yml runs votest for BOTH atlas and belleii via the ruciopytest plugin (python -m pytest --suite=votest --policy=<X>), triggers pull_request+push+workflow_dispatch+nightly (cron 0 3 * * *), static two-policy matrix with per-policy junit/artifact/report naming (votest-atlas / votest-belleii). Atlas-only votest leg removed from simple-autotest.yml (5 legs remain: remote_dbs x2, multi_vo-tst/ts2, client). Restores belleii votest CI coverage (SUIT-07 gap). Per-PR cadence intentionally supersedes ROADMAP criterion #1 "not per-PR" per locked 11-CONTEXT decision
-Last activity: 2026-07-06 -- 11-01 executed (dedicated two-policy votest workflow)
+Phase: 11 of 13 (Simplify VO-tests workflow) -- both plans complete (pending phase verification)
+Plan: 11-02 complete (live two-policy votest verification) -- Phase 11 plans done
+Status: 11-02 shipped -- simplify_votests.yml PROVEN GREEN live on maany/rucio for BOTH policies via the plugin path. First live belleii plugin-path run surfaced 3 ScopeNotFound failures in tests/test_belleii.py DIRAC tests (test_dirac_addfile*); root cause was the missing belleii scope set + /belle CONTAINER DID hierarchy that upstream provisions via tools/bootstrap_tests.py::belleii_bootstrap but the plugin's InfraManager._bootstrap_test_data() omitted. Ported belleii_bootstrap into _bootstrap_test_data() POLICY-gated (commit 79eeb27b8); re-ran green -- votest-atlas + votest-belleii both success on dispatch run 28782189273 and PR run 28782165867. ROADMAP success criterion #3 met; belleii plugin path proven live for the first time
+Last activity: 2026-07-06 -- 11-02 executed (live votest verification, belleii bootstrap fix, both legs green)
 
 Progress: v1.0 [██████████] 100% | v1.1 [██░░░░░░░░] 17%
 
@@ -146,6 +146,7 @@ Recent decisions affecting current work:
 - [Phase 09]: 09-01: ruciopytest README grounded in source (plugin.py/profiles.py/forwarding.py/simple-autotest.yml); quickstart uses client host-side suite; output shown only for --co/--dry-run
 - [Phase 10-docs-and-traceability-cleanup]: 10-01: README RUCIO_MULTI_VO_LEG unset/unrecognized documented as 'both VOs run sequentially (tst then ts2)' per infra_manager.py:388-400; STATE.md milestone reconciled v1.0->v1.1; SUIT-09 backfilled into 07-03-SUMMARY
 - [Phase 11]: 11-01: dedicated simplify_votests.yml runs atlas+belleii via plugin (--suite=votest --policy=<X>); per-PR+push+nightly cadence matches legacy vo_tests.yml and supersedes ROADMAP criterion #1 'not per-PR'; votest leg removed from simple-autotest.yml (5 legs remain)
+- [Phase 11]: 11-02: LIVE-VERIFIED both votest legs green on maany/rucio (dispatch run 28782189273 + PR run 28782165867, sha 79eeb27b8). belleii plugin path proven live for the first time -- surfaced 3 ScopeNotFound DIRAC failures (test_dirac_addfile*); fix = ported belleii_bootstrap (belleii scope set + /belle CONTAINER DID hierarchy) into InfraManager._bootstrap_test_data(), POLICY-gated + idempotent (commit 79eeb27b8). DEVIATION: files_modified expanded to tests/ruciopytest/infra_manager.py (plan-anticipated: "add minimal provisioning if plugin does not config belleii"); workflow YAML unchanged. belleii provisioning belongs in the plugin, not the workflow, since the plugin owns setup+run in one pytest process
 
 ### Pending Todos
 

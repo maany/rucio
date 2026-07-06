@@ -32,7 +32,7 @@ to maany/rucio (delivery is a manual final step, not a phase).
 - [x] Phase 8.1: multi_vo parallel VO legs — split tst/ts2 into parallel matrix legs (INSERTED)
 - [ ] Phase 9: Plugin docs — tests/ruciopytest/README.md
 - [x] Phase 10: Docs & traceability cleanup — README env-var fix + SUIT-09 frontmatter backfill + STATE version reconcile (gap closure, audit v1.1) (completed 2026-07-02)
-- [ ] Phase 11: simplify_votests workflow — new nightly/dispatch votest workflow (atlas + belleii), plugin-driven (gap closure, audit v1.1)
+- [x] Phase 11: simplify_votests workflow — new nightly/dispatch votest workflow (atlas + belleii), plugin-driven (gap closure, audit v1.1) (completed 2026-07-06)
 - [ ] Phase 12: multi_vo legacy parity — revert 8.1 split, single shared-DB sequential leg (tst→ts2, gate) in simple-autotest.yml (gap closure, audit v1.1)
 
 ## Phase Details
@@ -122,7 +122,7 @@ legs (~51→~25 min). Net target ~20-25 min. Every leg stays green with its own 
 > `workflow_dispatch` + `schedule`; the new workflow matches that (per-PR + push + nightly).
 > Per 11-CONTEXT, votest is REMOVED from `simple-autotest.yml` and lives only in the new workflow.
 
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 - [ ] 11-01-PLAN.md — create `simplify_votests.yml` (static atlas+belleii matrix, plugin-driven, legacy cadence) + remove votest leg from `simple-autotest.yml` (SUIT-07)
 - [ ] 11-02-PLAN.md — live-CI verify: push/dispatch, drive both legs, fix belleii plugin-path failures until green, human-verify (SUIT-07)
 
@@ -153,5 +153,5 @@ legs (~51→~25 min). Net target ~20-25 min. Every leg stays green with its own 
 | 8.1 Multi-VO Parallel Legs | v1.1 | 4/4 | Complete | 2026-07-01 |
 | 9. Plugin Docs | v1.1 | 0/1 | Planned | - |
 | 10. Docs & Traceability Cleanup | 1/1 | Complete    | 2026-07-02 | - |
-| 11. simplify_votests Workflow | 1/2 | In Progress|  | - |
+| 11. simplify_votests Workflow | 2/2 | Complete   | 2026-07-06 | - |
 | 12. multi_vo Legacy Parity | v1.1 | 0/? | Planned (gap closure) | - |
