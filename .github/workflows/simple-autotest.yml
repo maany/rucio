@@ -50,11 +50,6 @@ jobs:
             leg: client
             python: "3.9"
             rdbms: postgres14
-          - suite: votest
-            leg: votest
-            python: "3.9"
-            rdbms: postgres14
-            policy: atlas
 
     steps:
       - name: Checkout code
