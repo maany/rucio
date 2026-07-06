@@ -32,18 +32,12 @@ jobs:
             leg: remote_dbs
             python: "3.10"
             rdbms: postgres14
-          # multi_vo is split into two parallel runner jobs (own compose stack each).
-          # Both are suite=multi_vo + py3.9 + postgres14, so they WOULD collide on every
-          # name; the `leg` label (multi_vo-tst / multi_vo-ts2) disambiguates them, and
-          # `vo` selects the single VO the Plan-01 harness runs via RUCIO_MULTI_VO_LEG.
+          # multi_vo runs as ONE leg (legacy parity): RUCIO_MULTI_VO_LEG is left unset
+          # (no `vo:` field), so InfraManager.run_multi_vo() takes the sequential
+          # shared-DB path -- tst first, then ts2 only on tst success, no DB reset
+          # between VOs. One shared instance, matching run_multi_vo_tests_docker.sh.
           - suite: multi_vo
-            leg: multi_vo-tst
-            vo: tst
-            python: "3.9"
-            rdbms: postgres14
-          - suite: multi_vo
-            leg: multi_vo-ts2
-            vo: ts2
+            leg: multi_vo
             python: "3.9"
             rdbms: postgres14
           - suite: client
@@ -176,8 +170,10 @@ jobs:
           RDBMS: ${{ matrix.rdbms }}
           PYTHON: ${{ matrix.python }}
           POLICY: ${{ matrix.policy }}
-          # Selects the single VO the Plan-01 harness runs for a multi_vo leg (tst | ts2).
-          # Empty for the 4 non-multi_vo legs (harness ignores it). The RUCIO_ prefix is
+          # The multi_vo leg leaves `vo:` unset, so this resolves to an empty string and
+          # run_multi_vo() takes the sequential shared-DB path (tst -> ts2, ts2 gated on
+          # tst success). Empty for the non-multi_vo legs too (harness ignores it).
+          # `tst`/`ts2` remain a local/dev single-VO override. The RUCIO_ prefix is
           # auto-forwarded into the container by forwarding.py, so it reaches run_multi_vo().
           RUCIO_MULTI_VO_LEG: ${{ matrix.vo }}
         run: |
