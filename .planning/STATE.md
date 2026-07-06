@@ -2,13 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Productionize & Merge
-status: unknown
-last_updated: "2026-07-02T11:55:23.843Z"
+status: completed
+stopped_at: Completed 11-01-PLAN.md
+last_updated: "2026-07-06T09:06:10.475Z"
+last_activity: 2026-07-02 -- 10-01 executed (docs and traceability cleanup)
 progress:
-  total_phases: 13
-  completed_phases: 11
-  total_plans: 28
-  completed_plans: 28
+  total_phases: 7
+  completed_phases: 5
+  total_plans: 15
+  completed_plans: 14
+  percent: 100
 ---
 
 # Project State
@@ -23,10 +26,10 @@ See: .planning/PROJECT.md (updated 2026-02-20)
 ## Current Position
 
 Milestone: v1.1 Productionize & Merge (in progress)
-Phase: 10 of 13 (Docs and traceability cleanup) -- complete
-Plan: 10-01 complete (v1.1-audit gap closure, DOC-01 closed) -- Phase 09 (plugin docs) done prior
-Status: 10-01 shipped -- three mechanical gap-closure edits from the v1.1 milestone audit: (1) README RUCIO_MULTI_VO_LEG unset/unrecognized now correctly documented as "both VOs run sequentially (tst then ts2)" matching infra_manager.py:388-400; (2) 07-03-SUMMARY.md frontmatter backfilled requirements-completed: [SUIT-09]; (3) STATE.md milestone frontmatter reconciled v1.0 -> v1.1. No source-code behavior change
-Last activity: 2026-07-02 -- 10-01 executed (docs and traceability cleanup)
+Phase: 11 of 13 (Simplify VO-tests workflow) -- in progress
+Plan: 11-01 complete (dedicated votest workflow) -- 11-02 (live verification) next
+Status: 11-01 shipped -- new .github/workflows/simplify_votests.yml runs votest for BOTH atlas and belleii via the ruciopytest plugin (python -m pytest --suite=votest --policy=<X>), triggers pull_request+push+workflow_dispatch+nightly (cron 0 3 * * *), static two-policy matrix with per-policy junit/artifact/report naming (votest-atlas / votest-belleii). Atlas-only votest leg removed from simple-autotest.yml (5 legs remain: remote_dbs x2, multi_vo-tst/ts2, client). Restores belleii votest CI coverage (SUIT-07 gap). Per-PR cadence intentionally supersedes ROADMAP criterion #1 "not per-PR" per locked 11-CONTEXT decision
+Last activity: 2026-07-06 -- 11-01 executed (dedicated two-policy votest workflow)
 
 Progress: v1.0 [██████████] 100% | v1.1 [██░░░░░░░░] 17%
 
@@ -75,6 +78,7 @@ Progress: v1.0 [██████████] 100% | v1.1 [██░░░░�
 | Phase 08.1 P03 | 32min | 2 tasks | 2 files |
 | Phase 09 P01 | 2min | 2 tasks | 1 files |
 | Phase 10-docs-and-traceability-cleanup P01 | 2min | 3 tasks | 3 files |
+| Phase 11 P01 | 3min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -141,6 +145,7 @@ Recent decisions affecting current work:
 - [Phase 08.1]: 08.1-03: LIVE-CI VERIFIED both levers on PR run 28503879697 (sha 70cdaafa8) — 7/7 jobs green; multi_vo-tst/ts2 overlap (parallel) with distinct artifacts; forwarded xdist material (remote_dbs 41->28m, votest 21->15m); total wall 51m31s->30m50s (below legacy ~36m). xdist speedup more modest than the optimistic ~15m/~8m estimate but material+green (CPU-bound container at numprocesses=3). host-logs-* are on-failure-only, so xdist worker proof taken from local ts2 repro (created 3/3 workers gw0..gw2)
 - [Phase 09]: 09-01: ruciopytest README grounded in source (plugin.py/profiles.py/forwarding.py/simple-autotest.yml); quickstart uses client host-side suite; output shown only for --co/--dry-run
 - [Phase 10-docs-and-traceability-cleanup]: 10-01: README RUCIO_MULTI_VO_LEG unset/unrecognized documented as 'both VOs run sequentially (tst then ts2)' per infra_manager.py:388-400; STATE.md milestone reconciled v1.0->v1.1; SUIT-09 backfilled into 07-03-SUMMARY
+- [Phase 11]: 11-01: dedicated simplify_votests.yml runs atlas+belleii via plugin (--suite=votest --policy=<X>); per-PR+push+nightly cadence matches legacy vo_tests.yml and supersedes ROADMAP criterion #1 'not per-PR'; votest leg removed from simple-autotest.yml (5 legs remain)
 
 ### Pending Todos
 
@@ -159,6 +164,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-02T11:52:12.046Z
-Stopped at: Completed 10-01-PLAN.md
+Last session: 2026-07-06T09:06:02.963Z
+Stopped at: Completed 11-01-PLAN.md
 Resume file: None

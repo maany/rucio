@@ -117,6 +117,15 @@ legs (~51→~25 min). Net target ~20-25 min. Every leg stays green with its own 
   3. Both policy legs pass green on a manual `workflow_dispatch` run
   4. Decision recorded (in the plan) on whether the fast atlas smoke stays in `simple-autotest.yml` per-PR or votest moves entirely into the new workflow (pure legacy match)
 
+> **Note:** Success criterion #1's "not per-PR" wording is SUPERSEDED by the 11-CONTEXT locked
+> decision — upstream legacy `vo_tests.yml` runs votest on `pull_request` + `push` +
+> `workflow_dispatch` + `schedule`; the new workflow matches that (per-PR + push + nightly).
+> Per 11-CONTEXT, votest is REMOVED from `simple-autotest.yml` and lives only in the new workflow.
+
+**Plans:** 1/2 plans executed
+- [ ] 11-01-PLAN.md — create `simplify_votests.yml` (static atlas+belleii matrix, plugin-driven, legacy cadence) + remove votest leg from `simple-autotest.yml` (SUIT-07)
+- [ ] 11-02-PLAN.md — live-CI verify: push/dispatch, drive both legs, fix belleii plugin-path failures until green, human-verify (SUIT-07)
+
 ### Phase 12: multi_vo legacy parity (gap closure — audit v1.1)
 **Goal**: `multi_vo` CI runs both VOs (tst→ts2) **sequentially against one shared instance/DB**, matching legacy `run_multi_vo_tests_docker.sh`, restoring the shared-DB multi-tenancy coverage and stop-on-failure gate that the Phase 8.1 parallel split removed. Deliberately trades the 8.1 wall-time win for legacy-faithful correctness.
 **Depends on**: Phase 8.1 (undoes its multi_vo matrix split), Phase 7 (multi_vo 2-VO setup)
@@ -144,5 +153,5 @@ legs (~51→~25 min). Net target ~20-25 min. Every leg stays green with its own 
 | 8.1 Multi-VO Parallel Legs | v1.1 | 4/4 | Complete | 2026-07-01 |
 | 9. Plugin Docs | v1.1 | 0/1 | Planned | - |
 | 10. Docs & Traceability Cleanup | 1/1 | Complete    | 2026-07-02 | - |
-| 11. simplify_votests Workflow | v1.1 | 0/? | Planned (gap closure) | - |
+| 11. simplify_votests Workflow | 1/2 | In Progress|  | - |
 | 12. multi_vo Legacy Parity | v1.1 | 0/? | Planned (gap closure) | - |
