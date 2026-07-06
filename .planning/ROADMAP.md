@@ -153,5 +153,5 @@ legs (~51→~25 min). Net target ~20-25 min. Every leg stays green with its own 
 | 8.1 Multi-VO Parallel Legs | v1.1 | 4/4 | Complete | 2026-07-01 |
 | 9. Plugin Docs | v1.1 | 0/1 | Planned | - |
 | 10. Docs & Traceability Cleanup | 1/1 | Complete    | 2026-07-02 | - |
-| 11. simplify_votests Workflow | 2/2 | Complete   | 2026-07-06 | - |
+| 11. simplify_votests Workflow | 2/2 | Complete    | 2026-07-06 | - |
 | 12. multi_vo Legacy Parity | v1.1 | 0/? | Planned (gap closure) | - |
