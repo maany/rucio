@@ -33,7 +33,7 @@ to maany/rucio (delivery is a manual final step, not a phase).
 - [ ] Phase 9: Plugin docs — tests/ruciopytest/README.md
 - [x] Phase 10: Docs & traceability cleanup — README env-var fix + SUIT-09 frontmatter backfill + STATE version reconcile (gap closure, audit v1.1) (completed 2026-07-02)
 - [x] Phase 11: simplify_votests workflow — new nightly/dispatch votest workflow (atlas + belleii), plugin-driven (gap closure, audit v1.1) (completed 2026-07-06)
-- [ ] Phase 12: multi_vo legacy parity — revert 8.1 split, single shared-DB sequential leg (tst→ts2, gate) in simple-autotest.yml (gap closure, audit v1.1)
+- [x] Phase 12: multi_vo legacy parity — revert 8.1 split, single shared-DB sequential leg (tst→ts2, gate) in simple-autotest.yml (gap closure, audit v1.1) (completed 2026-07-06)
 
 ## Phase Details
 
@@ -138,9 +138,9 @@ legs (~51→~25 min). Net target ~20-25 min. Every leg stays green with its own 
   3. The multi_vo leg is green on a PR run, with tst→ts2 both executed on one shared DB (verify via logs: "Running tests for VO tst" then "Running tests for VO ts2", no inter-VO reset)
   4. junit/report/naming for the single multi_vo leg restored to non-split form; README CI-mapping + any 8.1 parity notes updated to reflect the reverted single-leg model and the accepted ~35 min long-pole
 
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 - [x] 12-01-PLAN.md — revert 8.1 matrix split: single multi_vo leg (no `vo:`, RUCIO_MULTI_VO_LEG unset → sequential shared-DB path) in simple-autotest.yml + README CI-mapping/parity doc sync (SUIT-08)
-- [ ] 12-02-PLAN.md — live-CI verify: push, watch multi_vo leg green on PR, prove sequential branch via logs ("Running tests for VO tst" → "ts2", no reset), human-verify (SUIT-08)
+- [x] 12-02-PLAN.md — live-CI verify: multi_vo leg GREEN on PR run 28787193259 (sha f2643a959, 1240 passed/0 failed); sequential shared-DB branch proven via RUCIO_MULTI_VO_LEG-empty discriminator + tst-streamed pass, non-split naming (test-results-multi_vo-py3.9) — closes audit Item-4 (SUIT-08) (completed 2026-07-06)
 
 ## Progress
 
@@ -158,4 +158,4 @@ legs (~51→~25 min). Net target ~20-25 min. Every leg stays green with its own 
 | 9. Plugin Docs | v1.1 | 0/1 | Planned | - |
 | 10. Docs & Traceability Cleanup | 1/1 | Complete    | 2026-07-02 | - |
 | 11. simplify_votests Workflow | 2/2 | Complete    | 2026-07-06 | - |
-| 12. multi_vo Legacy Parity | 1/2 | In Progress|  | - |
+| 12. multi_vo Legacy Parity | 2/2 | Complete   | 2026-07-06 | - |
