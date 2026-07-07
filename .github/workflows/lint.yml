@@ -1,11 +1,7 @@
-name: Run all the autotests
+name: Lint and Type Checks
 
 on:
-  # pull_request:
-  # push:
-  # schedule:
-  #   - cron: '0 3 * * *'
-  workflow_dispatch:
+  pull_request:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -13,8 +9,7 @@ concurrency:
 
 jobs:
   pre_commit:
-    if: github.repository_owner == 'rucio' || github.event_name != 'schedule'
-    name: Lint (pre-commit)
+    name: Pre-commit (ruff, headers, formatting)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
@@ -128,89 +123,3 @@ jobs:
           tools/run_pyright.sh compare --Werror \
             ${{ env.PYRIGHT_ANCESTOR_REPORT }} \
             ${{ env.PYRIGHT_CURRENT_REPORT }}
-  # Build runtime images for tests
-  runtime_images:
-    if: github.event_name != 'schedule'
-    name: Build Runtime Images
-    uses: ./.github/workflows/runtime_images.yml
-    permissions:
-      contents: read
-      packages: write
-  setup:
-    if: github.repository_owner == 'rucio' || github.event_name != 'schedule'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
-      - name: Update pip
-        run: python3 -m pip install -U pip setuptools
-      - name: Install python requirements for matrix_parser.py
-        run: python3 -m pip install -U PyYAML
-      - name: Identify branch
-        id: branch
-        run: python3 tools/github/workflow/set_branch_output_env.py
-      - name: Identify Matrix
-        id: matrix
-        run: |
-          EVENT="${{ github.event_name }}"
-          if [ $EVENT != 'schedule' ]; then
-            echo "matrix=$(./tools/test/matrix_parser.py < ./etc/docker/test/matrix.yml)" >> $GITHUB_OUTPUT
-          else
-            echo "matrix=$(./tools/test/matrix_parser.py < ./etc/docker/test/matrix_nightly.yml)" >> $GITHUB_OUTPUT
-          fi
-    outputs:
-      branch: ${{ steps.branch.outputs.branch }}
-      matrix: ${{ steps.matrix.outputs.matrix }}
-  test:
-    needs: [runtime_images, setup]
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        cfg: ${{ fromJson(needs.setup.outputs.matrix) }}
-    steps:
-      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-        continue-on-error: true
-      - name: Set repository variable
-        id: repo
-        run: echo "repo=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
-      - name: Build Python 3.9 image locally
-        if: needs.runtime_images.outputs.build_locally == 'true' && matrix.cfg.PYTHON == '3.9'
-        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
-        with:
-          context: .
-          file: etc/docker/test/runtime.Dockerfile
-          target: final
-          build-args: |
-            PYTHON=3.9
-          push: false
-          tags: ${{ needs.runtime_images.outputs.py39_image }}
-          outputs: type=docker
-          cache-from: type=registry,ref=ghcr.io/${{ steps.repo.outputs.repo }}/rucio-dev-runtime:py39-buildcache
-        continue-on-error: false
-      - name: Build Python 3.10 image locally
-        if: needs.runtime_images.outputs.build_locally == 'true' && matrix.cfg.PYTHON == '3.10'
-        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
-        with:
-          context: .
-          file: etc/docker/test/runtime.Dockerfile
-          target: final
-          build-args: |
-            PYTHON=3.10
-          push: false
-          tags: ${{ needs.runtime_images.outputs.py310_image }}
-          outputs: type=docker
-          cache-from: type=registry,ref=ghcr.io/${{ steps.repo.outputs.repo }}/rucio-dev-runtime:py310-buildcache
-        continue-on-error: false
-      - name: Run test with cfg
-        env:
-          PY39_RUNTIME_IMAGE: ${{ needs.runtime_images.outputs.py39_image }}
-          PY310_RUNTIME_IMAGE: ${{ needs.runtime_images.outputs.py310_image }}
-          BUILD_LOCALLY: ${{ needs.runtime_images.outputs.build_locally }}
-        run: |
-          echo '{"matrix": ${{ toJson(matrix.cfg) }}, "runtime_images": {"3.9": "${{ needs.runtime_images.outputs.py39_image }}", "3.10": "${{ needs.runtime_images.outputs.py310_image }}"}, "build_locally": "${{ needs.runtime_images.outputs.build_locally }}" }' | ./tools/test/run_tests.py
